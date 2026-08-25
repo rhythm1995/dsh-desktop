@@ -28,7 +28,8 @@
 
 1. `pnpm install --frozen-lockfile`
 2. `npx tauri build --bundles app,dmg`，环境变量 `DSH_DEV_TOOLS=0`、`DSH_PROFILE=production`、`CSC_IDENTITY_AUTO_DISCOVERY=false`（不做 macOS 签名/公证）
-3. 推 `v*` tag 触发时，`softprops/action-gh-release` 把 `src-tauri/target/release/bundle/**/*`（`.app` 与 `.dmg`）上传到该 tag 对应的 GitHub Release（不存在时自动创建）；`workflow_dispatch` 手动触发只打包并上传 artifact，不发布（`if: startsWith(github.ref, 'refs/tags/')`）
+3. `.app` 是目录，先压成 `DSH.Desktop.app.tar.gz`
+4. 推 `v*` tag 触发时，`softprops/action-gh-release` 把 `dmg/*.dmg` 与 `DSH.Desktop.app.tar.gz` 上传到该 tag 对应的 GitHub Release（不存在时自动创建）；`workflow_dispatch` 手动触发只打包并上传 artifact，不发布（`if: startsWith(github.ref, 'refs/tags/')`）。注意 globs 只圈顶层产物，别写 `**/*`——那会把 `.app`/`host/dist` 里的每个文件都当成资产上传
 
 `tauri.conf.json` 的 `bundle.targets` 是 `["dmg", "app"]`，命令行 `--bundles app,dmg` 与之一致；`beforeBuildCommand`（`npm run build:host`）会在 Tauri 打包前自动跑，无需单独步骤。
 
