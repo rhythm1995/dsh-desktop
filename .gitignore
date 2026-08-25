@@ -1,0 +1,17 @@
+# Local checkout of upstream product source; not part of this repo.
+anywhere-labs-dsh-desktop/
+
+node_modules/
+host/dist/
+host/dist-tests/
+host/src/runtime/build-profile.generated.ts
+host/upstream/.smoke-data/
+host/upstream/.app-verify/
+src-tauri/target/
+src-tauri/gen/
+native-ui/assets/*.map
+error
+*.log
+.DS_Store
+.vite/
+coverage/
