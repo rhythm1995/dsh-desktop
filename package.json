@@ -16,6 +16,7 @@
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
+  "packageManager": "pnpm@11.14.0",
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.0",
     "@types/node": "^22.20.0",

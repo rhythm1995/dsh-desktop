@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  host:
+    name: Host (typecheck + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate build profile
+        run: node scripts/write-build-profile.mjs
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+
+  shell:
+    name: Shell (cargo check + test)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Cargo check
+        run: cargo check --all-targets
+        working-directory: src-tauri
+      - name: Cargo test
+        run: cargo test
+        working-directory: src-tauri

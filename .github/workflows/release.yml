@@ -6,6 +6,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   macos:
     runs-on: macos-latest
@@ -14,19 +17,28 @@ jobs:
       DSH_PROFILE: production
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: 22
+          cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
       - name: Install JS dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
       - name: Package production app
         run: npx tauri build --bundles app,dmg
         env:
-          DSH_DEV_TOOLS: "0"
-          DSH_PROFILE: production
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      - uses: actions/upload-artifact@v4
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: src-tauri/target/release/bundle/**/*
+          fail_on_unmatched_files: true
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: macos-bundles
           path: src-tauri/target/release/bundle/**/*
