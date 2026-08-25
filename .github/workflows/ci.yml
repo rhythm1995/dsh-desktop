@@ -10,16 +10,16 @@ jobs:
     name: Host (typecheck + tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
-      - name: Generate build profile
-        run: node scripts/write-build-profile.mjs
+      - name: Build Host
+        run: pnpm build:host
       - name: Typecheck
         run: pnpm typecheck
       - name: Test
@@ -29,11 +29,22 @@ jobs:
     name: Shell (cargo check + test)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      # tauri-build 校验 tauri.conf.json 的 bundle.resources（../host/dist），
+      # 所以 Rust 编译前必须先把 Host 编译出来
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build Host
+        run: pnpm build:host
       - name: Cargo check
         run: cargo check --all-targets
         working-directory: src-tauri

@@ -13,10 +13,11 @@
 
 | Job | Runner | 步骤 |
 | --- | --- | --- |
-| `host` | `ubuntu-latest` | `pnpm install --frozen-lockfile` → `node scripts/write-build-profile.mjs` → `pnpm typecheck` → `pnpm test` |
-| `shell` | `macos-latest` | `cargo check --all-targets` → `cargo test`（工作目录 `src-tauri/`，带 `Swatinem/rust-cache`） |
+| `host` | `ubuntu-latest` | `pnpm install --frozen-lockfile` → `pnpm build:host` → `pnpm typecheck` → `pnpm test` |
+| `shell` | `macos-latest` | `pnpm install --frozen-lockfile` → `pnpm build:host` → `cargo check --all-targets` → `cargo test`（工作目录 `src-tauri/`，带 `Swatinem/rust-cache`） |
 
 - Host 是纯 Node/TypeScript，跑在更便宜更快的 ubuntu runner 上；Rust 壳的产物平台是 macOS，`shell` job 用 `macos-latest` 与发布保持一致。
+- 两个 job 都要先 `pnpm build:host`：`host/tests/host-entry-launch.spec.ts` 需要编译产物 `host/dist/main.js`；`tauri-build` 又会校验 `tauri.conf.json` 里的 `bundle.resources`（`../host/dist`）必须存在，否则 `cargo check` 直接失败。
 - Node 版本固定 `22`（`package.json` 的 `engines` 要求 `^22.19.0 || >=24.0.0`）；pnpm 版本由 `pnpm/action-setup` 从 `package.json` 的 `packageManager` 字段读取。
 - `pnpm test` 里 `official-host.spec.ts` 的集成用例依赖 git 忽略的上游 `dsh-plugin-desktop` 检出，CI 上没有该检出时自动跳过（`it.skipIf`），不算失败。
 - 生产语义在 CI 自动生效：`GITHUB_ACTIONS=true` 时 `write-build-profile.mjs` 生成 `COMPILED_DEV_TOOLS=false`（见 `docs/devtools-listen.md`）。
@@ -49,7 +50,7 @@ git push origin v0.1.1   # 触发 release.yml，产物出现在 GitHub Release
 
 ```bash
 pnpm install --frozen-lockfile
-node scripts/write-build-profile.mjs
+pnpm build:host
 pnpm typecheck
 pnpm test
 cd src-tauri && cargo check --all-targets && cargo test
