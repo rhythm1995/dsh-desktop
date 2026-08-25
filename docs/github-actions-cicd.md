@@ -62,6 +62,13 @@ cd src-tauri && cargo check --all-targets && cargo test
 act push -W .github/workflows/ci.yml -P ubuntu-latest=catthehacker/ubuntu:act-latest
 ```
 
+注意：act 会把**当前工作区**（含未提交的改动）拷进容器，而不是只构建已提交代码。本地有未完成的改动时，先在干净克隆里跑：
+
+```bash
+git clone -b <branch> . /tmp/dsh-ci-test && cd /tmp/dsh-ci-test
+act push -W .github/workflows/ci.yml -P ubuntu-latest=catthehacker/ubuntu:act-latest
+```
+
 ## 优先级
 
 | 事项 | 优先级 |
