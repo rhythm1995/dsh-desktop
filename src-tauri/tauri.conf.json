@@ -1,11 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "DSH Desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "ai.deepseek.dsh.desktop",
   "build": {
     "frontendDist": "../native-ui",
-    "beforeBuildCommand": "pnpm build:host"
+    "beforeBuildCommand": "pnpm fetch:runtimes && pnpm build:host",
+    "beforeDevCommand": "pnpm fetch:runtimes && pnpm build:host"
   },
   "app": {
     "withGlobalTauri": true,
@@ -39,7 +40,8 @@
     ],
     "resources": {
       "../host/dist": "host/dist",
-      "../native-ui": "native-ui"
+      "../native-ui": "native-ui",
+      "../vendor/runtimes": "runtimes"
     },
     "macOS": {
       "signingIdentity": "-"

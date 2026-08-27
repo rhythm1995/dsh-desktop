@@ -3,6 +3,10 @@ anywhere-labs-dsh-desktop/
 .anywhere-labs-dsh-desktop/
 .deepseek-harness/
 
+vendor/runtimes/*
+!vendor/runtimes/.gitkeep
+vendor/runtimes-cache/
+
 node_modules/
 host/dist/
 host/dist-tests/

@@ -2,7 +2,7 @@
 
 目录：[`README.md`](README.md)。架构见 [`tauri-v2-sidecar-migration.md`](tauri-v2-sidecar-migration.md)。
 
-对照对象是本地检出 `.anywhere-labs-dsh-desktop/dsh-plugin-desktop/`（Electron 壳 + 官方 Host）。本仓库是 Tauri v2 壳 + Node Host，目标是**产品形态一致**，不是把 Electron API 翻译过来。
+对照对象是本地检出 `.anywhere-labs-dsh-desktop/dsh-plugin-desktop/`（Electron 壳 + 官方 Host）。本仓库是 Tauri v2 壳 + JS Host（Bun 优先，否则 Node），目标是**产品形态一致**，不是把 Electron API 翻译过来。
 
 核对日期：2026-08-27。依据是原版 `tests/` 与源码，以及本仓库 `host/`、`src-tauri/`、`native-ui/` 的实现。`.anywhere-labs-dsh-desktop` 已快进到 `681ba66091`（内核 pin 未变）。
 
@@ -21,7 +21,7 @@
 
 - 内核 / Harness / Web Client DOM
 - electron-builder、asar、`webPreferences`、Crashpad 文件名
-- 用 `ELECTRON_RUN_AS_NODE` 当 Node（Tauri 必须 shim **真实 Node + dsh CLI**）
+- 用 `ELECTRON_RUN_AS_NODE` 当 Node（Tauri 必须 shim **真实 JS 运行时 + dsh CLI**；运行时是 Bun 或 Node，不是 Electron）
 
 ## 已对齐（不要再当缺口）
 

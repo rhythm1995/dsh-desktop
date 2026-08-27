@@ -13,6 +13,7 @@ import { NetworkJournal } from './runtime/network-journal.ts'
 import { IpcDesktopRuntime } from './runtime/ipc-desktop-runtime.ts'
 import { desktopTrayLabel } from './runtime/dialog-copy.ts'
 import { loadNativeBootstrap, writeNativeBootstrap } from './runtime/native-bootstrap.ts'
+import { installBunHostCompat } from './runtime/bun-host-compat.ts'
 import { installDesktopNodeRuntime } from './runtime/node-runtime-environment.ts'
 import { officialHostEntry } from './runtime/official-host.ts'
 import { defaultDesktopUserDataDirectory, defaultDshHome, dshPluginDesktopRoot } from './runtime/paths.ts'
@@ -228,6 +229,7 @@ function platformOfProcess(): DesktopPlatform {
 }
 
 async function main(): Promise<void> {
+  await installBunHostCompat()
   const { recovery } = parseArgv(process.argv.slice(2))
   const transport = createStdioTransport()
   const userDataDir = process.env.DSH_DESKTOP_USER_DATA && process.env.DSH_DESKTOP_USER_DATA.length > 0

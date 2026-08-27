@@ -1,5 +1,5 @@
 export const PRODUCT_NAME = 'DSH Desktop'
-export const PRODUCT_VERSION = '0.1.0'
+export const PRODUCT_VERSION = '0.1.1'
 export const RENDERER_BOOT_REPORT_PATH = '/_dsh/desktop/renderer-boot'
 export const DEFAULT_WINDOW_WIDTH = 1280
 export const DEFAULT_WINDOW_HEIGHT = 800

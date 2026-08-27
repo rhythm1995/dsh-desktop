@@ -39,10 +39,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      # tauri-build 校验 tauri.conf.json 的 bundle.resources（../host/dist），
-      # 所以 Rust 编译前必须先把 Host 编译出来
+      # tauri-build 校验 bundle.resources（../host/dist、../vendor/runtimes），
+      # 所以 cargo check 前必须先有 Host 产物，并 fetch 应用内运行时
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
+      - name: Cache bundled JS runtimes
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/runtimes
+            vendor/runtimes-cache
+          key: runtimes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/runtimes.lock.json') }}
+      - name: Fetch bundled JS runtimes
+        run: pnpm fetch:runtimes
       - name: Build Host
         run: pnpm build:host
       - name: Cargo check

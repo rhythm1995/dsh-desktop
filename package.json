@@ -1,13 +1,14 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
-  "description": "DSH Desktop Tauri v2 shell with a Node Host process",
+  "description": "DSH Desktop Tauri v2 shell with a Bun/Node Host process",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
+    "fetch:runtimes": "node scripts/fetch-runtimes.mjs",
     "build:host": "node scripts/sync-official-host.mjs && node scripts/write-build-profile.mjs && tsc -p tsconfig.json",
     "dev:host": "node scripts/write-build-profile.mjs && tsc -p tsconfig.json && node host/dist/main.js",
     "tauri": "tauri",

@@ -16,14 +16,24 @@ type HostLaunch = {
   html: string
 }
 
-function launchCompiledHost(userDataDir: string): Promise<HostLaunch> {
+function bunExecutable(): string | undefined {
+  const home = process.env.HOME
+  const candidates = [
+    home === undefined ? undefined : join(home, '.bun/bin/bun'),
+    '/opt/homebrew/bin/bun',
+    '/usr/local/bin/bun',
+  ]
+  return candidates.find(candidate => candidate !== undefined && existsSync(candidate))
+}
+
+function launchCompiledHost(userDataDir: string, runtime = process.execPath, runtimeArgs: string[] = []): Promise<HostLaunch> {
   return new Promise((resolve, reject) => {
     if (!existsSync(entry)) {
       reject(new Error(`compiled Host entry missing: ${entry}`))
       return
     }
     mkdirSync(userDataDir, { recursive: true })
-    const child = spawn(process.execPath, [entry], {
+    const child = spawn(runtime, [...runtimeArgs, entry], {
       env: { ...process.env, DSH_DESKTOP_USER_DATA: userDataDir, DSH_OFFICIAL_HOST: '0' },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -123,5 +133,19 @@ describe('compiled Host entry', () => {
     expect(second.status).toBe(200)
     expect(first.html).toContain('data-tauri-drag-region')
     expect(second.html).toContain('data-tauri-drag-region')
+  })
+
+  const bun = bunExecutable()
+  it.skipIf(bun === undefined)('emits schedule and mount under bun', async () => {
+    const launched = await launchCompiledHost(
+      mkdtempSync(join(tmpdir(), 'dsh-launch-bun-')),
+      bun as string,
+      ['--bun', '--no-env-file', '--no-install'],
+    )
+    expect(launched.url.startsWith('http://127.0.0.1:')).toBe(true)
+    expect(launched.methods).toContain(NATIVE_METHODS.schedule)
+    expect(launched.methods).toContain(NATIVE_METHODS.mount)
+    expect(launched.status).toBe(200)
+    expect(launched.html).toContain('data-tauri-drag-region')
   })
 })

@@ -4,6 +4,7 @@
     "rootDir": ".",
     "outDir": "host/dist-tests",
     "noEmit": true,
+    "allowJs": true,
     "types": ["node"]
   },
   "include": ["host/src/**/*.ts", "host/tests/**/*.ts"]

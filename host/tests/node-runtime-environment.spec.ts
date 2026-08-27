@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assertShimUsesRealNode,
   installDesktopNodeRuntime,
+  posixNodeShim,
   posixPnpmShim,
   windowsPnpmShim,
 } from '../src/runtime/node-runtime-environment.ts'
@@ -29,6 +30,18 @@ describe('Node Host command shims', () => {
     expect(windows).toContain('C:\\node\\node.exe')
     expect(posix).toContain('--config.minimumReleaseAge=0')
     expect(windows).toContain('--config.minimumReleaseAge=0')
+  })
+
+  it('shims exec bun when that is the Host JS runtime', () => {
+    const bun = "/Users/me/.bun/bin/bun"
+    const posix = posixPnpmShim({
+      nodeExecutable: bun,
+      pnpmBinPath: '/opt/pnpm.mjs',
+      nodeVersion: '22.6.0',
+    }, '/tmp/node-bin', '/tmp/node-bin/node')
+    expect(posix).toContain(`exec '${bun}' '/opt/pnpm.mjs'`)
+    expect(posix).toContain('npm_config_runtime=node')
+    expect(posixNodeShim(bun)).toContain(`exec '${bun}' "$@"`)
   })
 
   it('installs a public pnpm shim on PATH', () => {

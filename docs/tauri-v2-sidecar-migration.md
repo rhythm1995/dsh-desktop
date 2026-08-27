@@ -1,8 +1,8 @@
-# 架构：Tauri 壳 + Node Host
+# 架构：Tauri 壳 + JS Host
 
 目录：[`docs/README.md`](README.md)。产品缺口见 [`electron-parity-gaps.md`](electron-parity-gaps.md)。上游同步见 [`kernel-sync.md`](kernel-sync.md)。
 
-**已落地。** 不是把 Electron 应用翻译成 Tauri，而是换壳保核：Tauri v2 管窗口、托盘、安装器；Node Host（Cordis + DSH + 插件 + pnpm）是长驻进程。代码目录叫 `host/`，不要用 sidecar 当目录名。
+**已落地。** 不是把 Electron 应用翻译成 Tauri，而是换壳保核：Tauri v2 管窗口、托盘、安装器；JS Host（Cordis + DSH + 插件 + pnpm）是长驻进程。运行时优先 Bun，没有可用的 Bun 时回退 Node。包管理仍是 pnpm，不要换成 `bun install`。代码目录叫 `host/`，不要用 sidecar 当目录名。
 
 分析基于 git 忽略的检出 `.anywhere-labs-dsh-desktop/`（`dsh-plugin-desktop@2.0.3`）和 `.deepseek-harness/`（pin 见 `kernel-pin.json`）。
 
@@ -25,14 +25,14 @@ Electron 同时是窗口引擎和 Node 运行时。产品本身已经把「页�
   └─ Tauri v2 (Rust)          src-tauri/
        ├─ 单实例 / 窗口 / 托盘 / 菜单 / 对话框 / 通知 / 安装器
        ├─ 拖放路径、外链、主题/材质
-       └─ spawn Node 进程      host/dist + 官方 dsh-plugin-desktop
+       └─ spawn 应用内 JS 运行时   vendor/runtimes（Bun，否则 Node）→ host/dist
             └─ Cordis + DSH + 插件
                  ├─ loopback HTTP/WS → Webview 同一 origin
                  └─ DesktopRuntime → JSON-RPC stdio → Rust
 ```
 
 1. Tauri 拿单实例锁，读 `native-bootstrap.json` 里的 profile 名和 mode。
-2. 拉起 Node，注入 `DSH_HOME`、`DSH_PLUGIN_DESKTOP_ROOT`、user data。
+2. 拉起 **打进安装包的** JS 运行时，不依赖用户自己装的 Node/Bun。顺序：`DSH_NODE_BINARY` 覆盖 → 应用内 `runtimes/bun`（探测通过才用）→ 应用内 `runtimes/node` → 开发机上的系统 Bun/Node。二进制由 `pnpm fetch:runtimes` 按 `scripts/runtimes.lock.json` 拉到 `vendor/runtimes/`，Tauri 打进 `Contents/Resources/runtimes/`。Bun 额外带 `--bun --no-env-file --no-install`。官方 Host 仍需要 Node 的 `findPackageJSON` / `registerHooks`；当前 Bun 没有这两项时用应用内 Node，避免进 Recovery。垫片仍保留。`DSH_NODE_BINARY` 可强制指定。
 3. Host 绑定 loopback，RPC `schedule` / `mount`。
 4. 壳按 `DesktopShellSpec` 加载 `http://127.0.0.1:<port>`。
 5. 关窗隐藏；托盘退出或 `prepareToQuit` 才结束进程。
