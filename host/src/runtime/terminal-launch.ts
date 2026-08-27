@@ -1,6 +1,9 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DesktopPlatform, DesktopTerminalSpec } from './types.ts'
+
+/** Same mode Electron uses for welcome.command so macOS Terminal can execute it. */
+export const EXECUTABLE_FILE_MODE = 0o700
 
 export interface TerminalLaunchRecord {
   readonly profileName: string
@@ -28,6 +31,7 @@ export function recordTerminalLaunch(
     ? `@echo off\r\ncd /d ${spec.profileDir}\r\nset DSH_HOME=${spec.homeDir}\r\n`
     : `#!/bin/sh\ncd ${JSON.stringify(spec.profileDir)}\nexport DSH_HOME=${JSON.stringify(spec.homeDir)}\nexec "$SHELL"\n`
   writeFileSync(scriptPath, script)
+  if (platform !== 'win32') chmodSync(scriptPath, EXECUTABLE_FILE_MODE)
   const command = terminalCommand(platform, scriptPath)
   const recordPath = join(dir, `${stamp}.json`)
   writeFileSync(recordPath, `${JSON.stringify({

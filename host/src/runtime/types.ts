@@ -14,7 +14,7 @@ export type MacosWindowMaterial = 'off' | 'transparent'
 export type WindowsWindowMaterial = 'off' | 'acrylic' | 'mica'
 export type DesktopWindowMaterial = MacosWindowMaterial | WindowsWindowMaterial
 
-export type DesktopTrayItemGroup = 'tools' | 'profiles' | 'status'
+export type DesktopTrayItemGroup = 'tools' | 'profiles' | 'status' | 'mode'
 
 export interface DesktopTrayIcons {
   readonly templatePath: string
@@ -36,10 +36,17 @@ export interface DesktopWindowConfig {
   readonly minHeight: number
 }
 
+/** Generation-scoped capability distinguishing the desktop renderer from ordinary browsers. */
+export interface DesktopRendererAccessHeader {
+  readonly name: 'x-dsh-desktop-renderer'
+  readonly value: string
+}
+
 export interface DesktopShellPayload extends DesktopWindowConfig {
   readonly material: DesktopWindowMaterial
   readonly windowsBuild?: number
   readonly url: string
+  readonly rendererAccessHeader?: DesktopRendererAccessHeader
   readonly productName: string
   readonly windowTitle: string
   readonly iconPath: string
@@ -52,6 +59,8 @@ export interface DesktopShellSpec extends DesktopWindowConfig {
   readonly material: DesktopWindowMaterial
   readonly windowsBuild?: number
   readonly url: string
+  /** Ephemeral capability attached by the desktop shell to this renderer generation's requests. */
+  readonly rendererAccessHeader: DesktopRendererAccessHeader
   readonly productName: string
   readonly windowTitle: string
   readonly iconPath: string

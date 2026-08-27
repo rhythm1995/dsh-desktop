@@ -5,6 +5,8 @@ const PATH = 'PATH'
 const DIRECTORY_MODE = 0o700
 const EXECUTABLE_FILE_MODE = 0o700
 const PRIVATE_FILE_MODE = 0o600
+/** Same process-local pnpm policy as upstream `PNPM_IGNORE_MINIMUM_RELEASE_AGE`. */
+export const PNPM_IGNORE_MINIMUM_RELEASE_AGE = '--config.minimumReleaseAge=0'
 
 export interface DesktopNodeRuntimeOptions {
   readonly platform: NodeJS.Platform
@@ -63,7 +65,7 @@ export function posixPnpmShim(options: Pick<DesktopNodeRuntimeOptions, 'nodeExec
       `NODE=${quoteSh(nodeShimPath)}`,
       'npm_config_runtime=node',
       `npm_config_target=${quoteSh(options.nodeVersion)}`,
-      `exec ${quoteSh(options.nodeExecutable)} ${quoteSh(options.pnpmBinPath)} "$@"`,
+      `exec ${quoteSh(options.nodeExecutable)} ${quoteSh(options.pnpmBinPath)} ${PNPM_IGNORE_MINIMUM_RELEASE_AGE} "$@"`,
     ].join(' '),
     '',
   ].join('\n')
@@ -91,7 +93,7 @@ export function windowsPnpmShim(
     `set "NODE=${escapeBatchSetValue(nodeShimPath)}"`,
     'set "npm_config_runtime=node"',
     `set "npm_config_target=${escapeBatchSetValue(options.nodeVersion)}"`,
-    `${quoteBatchWord(options.nodeExecutable)} ${quoteBatchWord(options.pnpmBinPath)} %*`,
+    `${quoteBatchWord(options.nodeExecutable)} ${quoteBatchWord(options.pnpmBinPath)} ${PNPM_IGNORE_MINIMUM_RELEASE_AGE} %*`,
     'exit /b %errorlevel%',
     '',
   ].join('\r\n')

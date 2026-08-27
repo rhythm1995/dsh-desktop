@@ -17,6 +17,35 @@ describe('Host loopback carrier', () => {
     await carrier.close()
   })
 
+  it('forwards renderer boot reports from the page to the Host callback', async () => {
+    const reports: string[] = []
+    const carrier = await startLoopbackCarrier({
+      pageTitle: 'DSH Desktop',
+      onRendererBootReport: report => { reports.push(report.status) },
+    })
+    const healthy = await fetch(`${carrier.origin}${'/_dsh/desktop/renderer-boot'}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'healthy' }),
+    })
+    expect(healthy.status).toBe(204)
+    const failed = await fetch(`${carrier.origin}/_dsh/desktop/renderer-boot`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'failed', plugins: ['a'], error: 'boom' }),
+    })
+    expect(failed.status).toBe(204)
+    const malformed = await fetch(`${carrier.origin}/_dsh/desktop/renderer-boot`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'not-json',
+    })
+    expect(malformed.status).toBe(204)
+    await new Promise(resolve => setImmediate(resolve))
+    expect(reports).toEqual(['healthy', 'failed'])
+    await carrier.close()
+  })
+
   it('mounts a shell generation against the native RPC', async () => {
     const methods: string[] = []
     const transport = new LoopbackRpcTransport(async method => {

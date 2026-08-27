@@ -5,7 +5,7 @@
   "identifier": "ai.deepseek.dsh.desktop",
   "build": {
     "frontendDist": "../native-ui",
-    "beforeBuildCommand": "npm run build:host"
+    "beforeBuildCommand": "pnpm build:host"
   },
   "app": {
     "withGlobalTauri": true,

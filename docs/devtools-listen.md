@@ -1,5 +1,7 @@
 # 开发者日志 / 网络模块与 AI 监听方案
 
+目录：[`README.md`](README.md)。CI/CD 见 [`github-actions-cicd.md`](github-actions-cicd.md)。开发/生产判定以本文表格为准，不要在别处再抄一份。
+
 这两个模块只在 **开发模式** 出现。生产包没有托盘入口、没有 `/_dsh/dev/*` 路由，也不会写 `devtools/` 目录。
 
 ## 何时是开发模式

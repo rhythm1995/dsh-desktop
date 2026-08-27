@@ -26,6 +26,44 @@ export function clampZoom(level: number): number {
   return Math.min(4, Math.max(-4, level))
 }
 
+/** Titlebar double-click zoom, matching Electron hiddenInset / -webkit-app-region: drag. */
+export function shouldHandleTitlebarDblclick(input: {
+  readonly clientY: number
+  readonly titlebarHeight: number
+  readonly interactive: boolean
+  readonly inTitlebarRegion: boolean
+}): boolean {
+  if (input.interactive) return false
+  if (input.inTitlebarRegion) return true
+  return input.clientY >= 0 && input.clientY <= input.titlebarHeight
+}
+
+export function nextWindowMaximized(currentlyMaximized: boolean): boolean {
+  return !currentlyMaximized
+}
+
+/** Visual height used to center macOS traffic lights in the Desktop frame. */
+export const MACOS_TRAFFIC_LIGHT_BUTTON_HEIGHT = 12
+export const MACOS_TRAFFIC_LIGHT_X = 16
+
+export function macosTrafficLightWryInsetY(titlebarHeight: number): number {
+  return Math.max(0, titlebarHeight - MACOS_TRAFFIC_LIGHT_BUTTON_HEIGHT)
+}
+
+export function macosTrafficLightButtonOriginY(titlebarHeight: number, buttonHeight: number): number {
+  return Math.max(0, (titlebarHeight - buttonHeight) / 2)
+}
+
+/** Electron `applicationNeedsReveal`: Dock click restores a hidden/minimized window and does not steal focus when already visible. */
+export function applicationNeedsReveal(input: {
+  readonly visible: boolean
+  readonly minimized: boolean
+  readonly appHidden: boolean
+  readonly platform: DesktopPlatform
+}): boolean {
+  return input.minimized || !input.visible || (input.platform === 'darwin' && input.appHidden)
+}
+
 export function originOf(href: string): string | undefined {
   try {
     const url = new URL(href)

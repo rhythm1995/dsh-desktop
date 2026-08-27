@@ -16,6 +16,7 @@ import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import { installDesktopDshRuntime } from './desktop-runtime-environment.ts'
+import { createDesktopBrowserAccess } from './desktop-browser-access.ts'
 import {
   ElectronStderrLogger,
   installDesktopUncaughtExceptionLogging,
@@ -60,6 +61,7 @@ import type {
 import { routeDesktopStartupFailure } from './startup-failure-routing.ts'
 import { DesktopStartupGeneration } from './startup-generation.ts'
 import { desktopInstallAnchor, prepareDesktopProfile } from './profile.ts'
+import { migrateDesktopBrowserAccessSettings } from './setup-wizard-settings.ts'
 import { clearDesktopProfileCheckpoint, DesktopProfileCheckpoint } from './profile-checkpoint.ts'
 import { materializeProfile, ProfileMaterializationError } from './profile-materializer.ts'
 import type { DesktopPnpmBootstrap } from './pnpm.ts'
@@ -91,6 +93,13 @@ class RendererStartupFailure extends Error {
 
 export interface TauriHostRuntime extends DesktopRuntime {
   configureTerminal(spec: DesktopTerminalSpec): void
+  setTerminalRuntime?(runtime: {
+    nodeExecutable: string
+    dshBootstrapPath: string
+    pnpmBinPath: string
+    nodeVersion: string
+    productVersion: string
+  }): void
   beginRendererBootMonitoring(
     options: { commitHealthy: () => Promise<void> },
     timeoutMs?: number,
@@ -434,9 +443,19 @@ export async function startTauriHost(options: TauriHostOptions): Promise<void> {
       activeProfileName,
       pluginManagementStatePath,
       marketSelection,
-      startupRecoveryStatePath,
       preparationHooks,
     )
+    if (await migrateDesktopBrowserAccessSettings(prepared.settingsDocument)) {
+      prepared = prepareDesktopProfile(
+        process.env.DSH_TELEMETRY_DISABLED,
+        homeDir,
+        process.platform,
+        activeProfileName,
+        pluginManagementStatePath,
+        marketSelection,
+        preparationHooks,
+      )
+    }
     if (profileCheckpoint === undefined) {
       try {
         profileCheckpoint = new DesktopProfileCheckpoint({
@@ -455,6 +474,13 @@ export async function startTauriHost(options: TauriHostOptions): Promise<void> {
     startupStage = 'runtime-bootstrap'
     lifecycleRecorder.transitionStartupStage(startupStage)
     const dshBootstrapPath = fileURLToPath(new URL('./desktop-cli.js', import.meta.url))
+    options.runtime.setTerminalRuntime?.({
+      nodeExecutable: options.nodeExecutable,
+      dshBootstrapPath,
+      pnpmBinPath: options.pnpmBinPath,
+      nodeVersion: options.nodeVersion,
+      productVersion: options.productVersion,
+    })
     const dshRuntime = process.platform === 'win32'
       ? installDesktopDshRuntime({
           platform: process.platform,
@@ -488,7 +514,6 @@ export async function startTauriHost(options: TauriHostOptions): Promise<void> {
           activeProfileName,
           pluginManagementStatePath,
           marketSelection,
-          startupRecoveryStatePath,
           preparationHooks,
         )
         if (prepared.requiresDependencyMigration) {
@@ -506,6 +531,9 @@ export async function startTauriHost(options: TauriHostOptions): Promise<void> {
         `${BIN_NAME}: requested Market provider ${prepared.market.requested} was disabled for this generation: ${prepared.marketFailure}`,
       )
     }
+    const browserAccess = createDesktopBrowserAccess(
+      prepared.mode === 'compatibility' && prepared.openBrowser,
+    )
     const desktopPnpmBootstrap: DesktopPnpmBootstrap = {
       activeProfileName,
       activeProfileDir: prepared.profile.dir,
@@ -548,6 +576,7 @@ export async function startTauriHost(options: TauriHostOptions): Promise<void> {
           'dsh-plugin-desktop: profile package resolution',
         )
         hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment)
+        hostCtx.provide('desktopBrowserAccess', browserAccess)
         hostCtx.provide('desktopRuntime', runtime)
         hostCtx.provide('desktopPnpmBootstrap', desktopPnpmBootstrap)
         await hostCtx.plugin(DesktopActionsService, {

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,9 +12,11 @@ import { checkForStableUpdate } from '../src/runtime/update-checker.ts'
 import {
   folderDropScript,
   loadWindowBounds,
+  nextWindowMaximized,
   openExternalHref,
   persistWindowBounds,
   planWindowGeneration,
+  shouldHandleTitlebarDblclick,
   shouldOpenExternally,
 } from '../src/runtime/window-ops.ts'
 
@@ -46,6 +48,38 @@ describe('Host native product effects', () => {
     expect(launch.command).toContain('Terminal')
     const record = readFileSync(launch.recordPath, 'utf8')
     expect(record).toContain('"profileName": "desktop"')
+    if (process.platform !== 'win32') {
+      expect(lstatSync(launch.scriptPath).mode & 0o777).toBe(0o700)
+    }
+  })
+
+  it('zooms on titlebar double-click and restores on the next one', () => {
+    expect(shouldHandleTitlebarDblclick({
+      clientY: 12,
+      titlebarHeight: 36,
+      interactive: false,
+      inTitlebarRegion: true,
+    })).toBe(true)
+    expect(shouldHandleTitlebarDblclick({
+      clientY: 12,
+      titlebarHeight: 36,
+      interactive: true,
+      inTitlebarRegion: true,
+    })).toBe(false)
+    expect(shouldHandleTitlebarDblclick({
+      clientY: 8,
+      titlebarHeight: 36,
+      interactive: false,
+      inTitlebarRegion: false,
+    })).toBe(true)
+    expect(shouldHandleTitlebarDblclick({
+      clientY: 80,
+      titlebarHeight: 36,
+      interactive: false,
+      inTitlebarRegion: false,
+    })).toBe(false)
+    expect(nextWindowMaximized(false)).toBe(true)
+    expect(nextWindowMaximized(true)).toBe(false)
   })
 
   it('parses update-available vs up-to-date from a fixture body and downloads the installer', async () => {
@@ -65,13 +99,15 @@ describe('Host native product effects', () => {
     expect(current?.status).toBe('up-to-date')
     const userData = tempDir('update')
     const destinationPath = join(userData, 'updates', 'DSH-Desktop-0.2.0.bin')
+    const artifact = Buffer.alloc(1024)
+    artifact.write('koly', 1024 - 512, 'ascii')
     const saved = await downloadDesktopUpdate({
       platform: 'darwin',
       version: '0.2.0',
       destinationPath,
-      request: async () => new Response(Buffer.from('installer-bytes'), { status: 200 }),
+      request: async () => new Response(artifact, { status: 200 }),
     })
-    expect(readFileSync(saved, 'utf8')).toBe('installer-bytes')
+    expect(readFileSync(saved, 'utf8')).toBe(artifact.toString('utf8'))
     await expect(downloadDesktopUpdate({
       platform: 'darwin',
       version: '0.2.0',

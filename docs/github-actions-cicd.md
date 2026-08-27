@@ -1,5 +1,7 @@
 # GitHub Actions CI/CD 方案
 
+目录：[`README.md`](README.md)。开发/生产开关见 [`devtools-listen.md`](devtools-listen.md)，本文不重复判定表。产品更新走 Host 自研下载，不用 Tauri Updater。
+
 两条工作流，都在 `.github/workflows/`：
 
 | 工作流 | 文件 | 职责 | 触发 |
@@ -78,4 +80,3 @@ act push -W .github/workflows/ci.yml -P ubuntu-latest=catthehacker/ubuntu:act-la
 | CD 打包并发布 GitHub Release（macOS） | P0 |
 | Windows / Linux 打包 | P1 |
 | Apple 签名与公证 | P1 |
-| 自动更新（tauri-plugin-updater + latest.json） | P2 |

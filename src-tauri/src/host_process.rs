@@ -76,12 +76,13 @@ pub fn dsh_plugin_desktop_root(resource_dir: Option<&Path>) -> PathBuf {
     if let Some(dir) = resource_dir {
         candidates.push(dir.join("dsh-plugin-desktop"));
     }
+    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.anywhere-labs-dsh-desktop/dsh-plugin-desktop"));
     candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../anywhere-labs-dsh-desktop/dsh-plugin-desktop"));
     candidates
         .into_iter()
         .find(|path| path.join("lib/tauri-host.js").exists())
         .unwrap_or_else(|| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../anywhere-labs-dsh-desktop/dsh-plugin-desktop")
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.anywhere-labs-dsh-desktop/dsh-plugin-desktop")
         })
 }
 
@@ -174,6 +175,34 @@ mod tests {
             "shell.mount must hop to the UI thread before navigating the hidden splash"
         );
         assert!(mount_arm.contains("mount_main_window"));
+    }
+
+    #[test]
+    fn traffic_lights_use_frame_height_not_default_inset() {
+        let lib = include_str!("lib.rs");
+        assert!(lib.contains("macos_traffic_light_wry_inset_y"));
+        assert!(lib.contains("apply_traffic_light_chrome"));
+        assert!(!lib.contains("y: 12.0"));
+    }
+
+    #[test]
+    fn macos_dock_reopen_reveals_the_hidden_main_window() {
+        let lib = include_str!("lib.rs");
+        assert!(lib.contains("RunEvent::Reopen"));
+        assert!(lib.contains("application_needs_reveal"));
+        assert!(lib.contains("reveal_main_window"));
+    }
+
+    #[test]
+    fn plugin_root_prefers_local_dotted_checkout() {
+        let root = dsh_plugin_desktop_root(None);
+        assert!(
+            root.ends_with(".anywhere-labs-dsh-desktop/dsh-plugin-desktop")
+                || root.ends_with("anywhere-labs-dsh-desktop/dsh-plugin-desktop")
+                || root.join("lib/tauri-host.js").exists(),
+            "{}",
+            root.display()
+        );
     }
 
     #[test]

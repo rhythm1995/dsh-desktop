@@ -18,6 +18,27 @@ import type {
   RendererBootReport,
 } from './types.ts'
 import { DesktopRendererHealthGate, type RendererHealthFailureReason, type RendererHealthVerdict } from './renderer-health.ts'
+import {
+  desktopDiagnosticsPrivacyCopy,
+  desktopLocaleFromLanguageTag,
+  desktopNativeCopy,
+  desktopRestartConfirmationCopy,
+  desktopTrayLabel,
+  volumeAdmissionCopy,
+} from './dialog-copy.ts'
+import {
+  desktopTerminalStateDirectory,
+  prepareDesktopTerminal,
+} from './desktop-terminal.ts'
+import { downloadDesktopUpdate } from './update-download.ts'
+
+export interface DesktopTerminalRuntime {
+  readonly nodeExecutable: string
+  readonly dshBootstrapPath: string
+  readonly pnpmBinPath: string
+  readonly nodeVersion: string
+  readonly productVersion: string
+}
 
 export interface DesktopTraySubmenuItem {
   label(): string
@@ -81,6 +102,7 @@ export interface DesktopRuntime {
   openProfileCreate(state: unknown): void
   openDevtools(options: { tab: 'logs' | 'network', origin: string }): void
   configureTerminal(spec: DesktopTerminalSpec): void
+  setTerminalRuntime?(runtime: DesktopTerminalRuntime): void
   beginRendererBootMonitoring(
     options: { commitHealthy: () => Promise<void> },
     timeoutMs?: number,
@@ -95,6 +117,18 @@ interface RegisteredTray {
   readonly submenu: DesktopTraySubmenuItem[]
 }
 
+function defaultSystemLocaleTag(): string {
+  for (const key of ['LC_ALL', 'LC_MESSAGES', 'LANG'] as const) {
+    const value = process.env[key]
+    if (value !== undefined && value.length > 0) return value
+  }
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale
+  } catch {
+    return 'en'
+  }
+}
+
 export class IpcDesktopRuntime implements DesktopRuntime {
   readonly platform: DesktopPlatform
   readonly windowsBuild: number | undefined
@@ -105,11 +139,19 @@ export class IpcDesktopRuntime implements DesktopRuntime {
   private mountTask: Promise<void> | undefined
   private generationId: string | undefined
   private terminalSpec: DesktopTerminalSpec | undefined
+  private terminalRuntime: DesktopTerminalRuntime | undefined
+  private readonly userDataDir: string
   private readonly tray = new Map<string, RegisteredTray>()
   private traySeq = 1
   private readonly unsubscribers: Array<() => void> = []
   private rendererHealthGate: DesktopRendererHealthGate | undefined
+  private rendererBootDialogTask: Promise<void> | undefined
+  private restartRequest: Promise<void> | undefined
+  private diagnosticExport: Promise<void> | undefined
+  private quitting = false
   private profileCreate?: ProfileCreateWindowOptions
+  private readonly systemLocaleTag: () => string
+  private readonly updatesRequest: (url: string, init: RequestInit) => Promise<Response>
 
   constructor(
     private readonly transport: RpcTransport,
@@ -120,6 +162,9 @@ export class IpcDesktopRuntime implements DesktopRuntime {
       userDataDir?: string
       isPackaged?: boolean
       currentVersion?: string
+      terminalRuntime?: DesktopTerminalRuntime
+      systemLocaleTag?: () => string
+      updatesRequest?: (url: string, init: RequestInit) => Promise<Response>
     } = {
       platform: process.platform === 'darwin' || process.platform === 'win32' || process.platform === 'linux'
         ? process.platform
@@ -129,32 +174,65 @@ export class IpcDesktopRuntime implements DesktopRuntime {
     this.platform = options.platform
     this.windowsBuild = options.windowsBuild
     if (options.locale !== undefined) this.locale = options.locale
+    this.terminalRuntime = options.terminalRuntime
     const userDataDir = options.userDataDir ?? ''
+    this.userDataDir = userDataDir
     const currentVersion = options.currentVersion ?? '0.1.0'
     const isPackaged = options.isPackaged ?? false
+    this.systemLocaleTag = options.systemLocaleTag ?? defaultSystemLocaleTag
+    this.updatesRequest = options.updatesRequest ?? ((url, init) => fetch(url, init))
     this.updates = {
       isPackaged,
       canDownload: this.platform === 'darwin' || this.platform === 'win32',
       currentVersion,
-      statePath: `${userDataDir}/update-state.json`,
-      request: (url, init) => fetch(url, init),
+      statePath: `${userDataDir}/updates/state.json`,
+      request: (url, init) => this.updatesRequest(url, init),
       confirmDownload: async version => {
+        const copy = desktopNativeCopy(this.locale)
         const result = await this.openDialog({
           type: 'info',
-          title: 'Update available',
-          message: version,
-          buttons: ['Download', 'Later'],
+          title: copy.updateAvailableTitle,
+          message: copy.updateAvailableMessage(version),
+          detail: copy.downloadUpdate,
+          buttons: [copy.download, copy.later],
           defaultId: 1,
           cancelId: 1,
         })
         return result.response === 0
       },
       showManualCheckResult: async result => {
-        await this.transport.request(NATIVE_METHODS.showUpdateResult, result ?? { status: 'failed' })
+        const copy = desktopNativeCopy(this.locale)
+        const dialog = result === null
+          ? {
+              type: 'warning' as const,
+              title: copy.updateCheckFailedTitle,
+              message: copy.updateCheckFailedMessage,
+              detail: copy.tryAgainLater,
+            }
+          : result.status === 'update-available' && this.updates.canDownload
+            ? undefined
+            : result.status === 'update-available'
+              ? {
+                  type: 'info' as const,
+                  title: copy.upToDateTitle,
+                  message: copy.upToDateMessage,
+                  detail: copy.installerUnavailable,
+                }
+              : {
+                  type: 'info' as const,
+                  title: copy.upToDateTitle,
+                  message: copy.upToDateMessage,
+                  detail: copy.installedVersion(result.currentVersion),
+                }
+        if (dialog === undefined) return
+        await this.openDialog({
+          ...dialog,
+          buttons: [copy.ok],
+          defaultId: 0,
+          cancelId: 0,
+        })
       },
-      downloadAndOpen: async (version, _signal) => {
-        await this.transport.request(NATIVE_METHODS.downloadUpdate, { version })
-      },
+      downloadAndOpen: (version, signal) => this.downloadUpdateInstaller(version, signal),
       notify: notification => { this.native(NATIVE_METHODS.notify, notification) },
     }
     this.unsubscribers.push(transport.on(NATIVE_EVENTS.trayInvoke, params => {
@@ -220,7 +298,7 @@ export class IpcDesktopRuntime implements DesktopRuntime {
         this.setLocalePreference(live.readLocalePreference())
         this.setThemeSource(live.readThemeSource())
         this.registerTrayItem({
-          group: 'status',
+          group: 'mode',
           order: 1_000,
           label: () => this.modeToggleLabel(live.mode),
           invoke: () => live.requestModeChange(this.nextMode(live.mode)),
@@ -255,6 +333,7 @@ export class IpcDesktopRuntime implements DesktopRuntime {
       material: spec.material,
       ...(spec.windowsBuild === undefined ? {} : { windowsBuild: spec.windowsBuild }),
       url: spec.url,
+      ...(spec.rendererAccessHeader === undefined ? {} : { rendererAccessHeader: spec.rendererAccessHeader }),
       productName: spec.productName,
       windowTitle: spec.windowTitle,
       iconPath: spec.iconPath,
@@ -271,9 +350,9 @@ export class IpcDesktopRuntime implements DesktopRuntime {
   }
 
   private modeToggleLabel(mode: DesktopShellMode): string {
-    if (mode === 'compatibility') return this.locale === 'zh' ? '切换到扩展窗口' : 'Switch to Extended'
-    if (mode === 'extended') return this.locale === 'zh' ? '切换到增强模式' : 'Switch to Advanced'
-    return this.locale === 'zh' ? '切换到兼容模式' : 'Switch to Compatibility'
+    if (mode === 'compatibility') return desktopTrayLabel(this.locale, 'switchToExtended')
+    if (mode === 'extended') return desktopTrayLabel(this.locale, 'switchToAdvanced')
+    return desktopTrayLabel(this.locale, 'switchToCompatibility')
   }
 
   private native(method: string, params?: unknown): void {
@@ -326,11 +405,66 @@ export class IpcDesktopRuntime implements DesktopRuntime {
     this.terminalSpec = { ...spec }
   }
 
+  setTerminalRuntime(runtime: DesktopTerminalRuntime): void {
+    this.terminalRuntime = runtime
+  }
+
   openTerminal(): void {
     if (this.terminalSpec === undefined) {
       throw new Error('dsh-desktop: terminal profile is not configured')
     }
-    this.native(NATIVE_METHODS.openTerminal, this.terminalSpec)
+    if (this.userDataDir.length === 0) {
+      this.native(NATIVE_METHODS.openTerminal, this.terminalSpec)
+      return
+    }
+    try {
+      const runtime = this.terminalRuntime
+      const launch = prepareDesktopTerminal({
+        platform: this.platform,
+        profileName: this.terminalSpec.profileName,
+        profileDir: this.terminalSpec.profileDir,
+        homeDir: this.terminalSpec.homeDir,
+        stateDir: desktopTerminalStateDirectory(this.userDataDir, this.terminalSpec.profileName),
+        productVersion: runtime?.productVersion ?? this.updates.currentVersion,
+        ...(runtime === undefined ? {} : {
+          nodeExecutable: runtime.nodeExecutable,
+          dshBootstrapPath: runtime.dshBootstrapPath,
+          pnpmBinPath: runtime.pnpmBinPath,
+          nodeVersion: runtime.nodeVersion,
+        }),
+      })
+      this.native(NATIVE_METHODS.openTerminal, {
+        ...this.terminalSpec,
+        command: launch.command,
+        scriptPath: launch.welcomePath,
+        ...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
+        ...(launch.environment === undefined ? {} : { environment: launch.environment }),
+      })
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      process.stderr.write(`dsh-desktop: failed to open terminal: ${message}\n`)
+      this.reportTerminalLaunchError(message)
+    }
+  }
+
+  private reportTerminalLaunchError(detail: string): void {
+    const copy = desktopNativeCopy(this.locale)
+    void this.openDialog({
+      type: 'error',
+      title: copy.terminalErrorTitle,
+      message: copy.terminalErrorMessage,
+      detail,
+      buttons: [copy.ok],
+      defaultId: 0,
+      cancelId: 0,
+    }).then(
+      () => undefined,
+      cause => {
+        process.stderr.write(
+          `dsh-desktop: failed to show terminal error dialog: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+        )
+      },
+    )
   }
 
   reloadRenderer(): void {
@@ -348,22 +482,138 @@ export class IpcDesktopRuntime implements DesktopRuntime {
   }
 
   async exportDiagnostics(): Promise<void> {
-    await this.transport.request(NATIVE_METHODS.exportDiagnostics, { locale: this.locale })
+    if (this.diagnosticExport !== undefined) return this.diagnosticExport
+    const operation = this.performDiagnosticExport().finally(() => {
+      if (this.diagnosticExport === operation) this.diagnosticExport = undefined
+    })
+    this.diagnosticExport = operation
+    return operation
+  }
+
+  private async performDiagnosticExport(): Promise<void> {
+    const copy = desktopDiagnosticsPrivacyCopy(this.locale)
+    try {
+      const confirmation = await this.openDialog({
+        type: 'warning',
+        title: copy.title,
+        message: copy.message,
+        detail: copy.detail,
+        buttons: [copy.confirm, copy.cancel],
+        defaultId: 1,
+        cancelId: 1,
+      })
+      if (confirmation.response !== 0) return
+      const exported = await this.transport.request<{ path?: string }>(NATIVE_METHODS.exportDiagnostics, {
+        locale: this.locale,
+        ...(this.terminalRuntime?.nodeVersion === undefined
+          ? {}
+          : { nodeVersion: this.terminalRuntime.nodeVersion }),
+      })
+      if (exported.path !== undefined && exported.path.length > 0) {
+        await this.transport.request(NATIVE_METHODS.revealItem, { path: exported.path })
+      }
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      process.stderr.write(`dsh-desktop: failed to export diagnostics: ${message}\n`)
+      await this.showDiagnosticsExportError(message)
+    }
+  }
+
+  private async showDiagnosticsExportError(detail: string): Promise<void> {
+    const copy = desktopNativeCopy(this.locale)
+    await this.openDialog({
+      type: 'error',
+      title: copy.diagnosticsErrorTitle,
+      message: copy.diagnosticsErrorMessage,
+      detail,
+      buttons: [copy.ok],
+      defaultId: 0,
+      cancelId: 0,
+    }).then(
+      () => undefined,
+      () => undefined,
+    )
   }
 
   async pickDirectory(): Promise<string | null> {
-    const result = await this.transport.request<{ path: string | null }>(NATIVE_METHODS.pickDirectory)
+    const result = await this.transport.request<{ path: string | null }>(NATIVE_METHODS.pickDirectory, {
+      title: volumeAdmissionCopy(this.locale).pickerTitle,
+    })
     return result.path
   }
 
   async validateDirectory(path: string): Promise<boolean> {
-    const result = await this.transport.request<{ ok: boolean }>(NATIVE_METHODS.validateDirectory, { path })
-    return result.ok
+    const result = await this.transport.request<{ ok?: boolean, decision?: string, fileSystem?: string }>(
+      NATIVE_METHODS.validateDirectory,
+      { path },
+    )
+    if (result.decision === undefined || result.decision === 'allow') {
+      return result.ok !== false
+    }
+    const copy = volumeAdmissionCopy(this.locale)
+    if (result.decision === 'confirm') {
+      const dialog = copy.confirm(path)
+      const confirmed = await this.openDialog({
+        type: 'warning',
+        title: dialog.title,
+        message: dialog.message,
+        detail: dialog.detail,
+        buttons: dialog.buttons,
+        defaultId: dialog.defaultId,
+        cancelId: dialog.cancelId,
+      })
+      return confirmed.response === 0
+    }
+    const dialog = copy.block(result.fileSystem ?? 'This filesystem', path)
+    await this.openDialog({
+      type: 'error',
+      title: dialog.title,
+      message: dialog.message,
+      detail: dialog.detail,
+      buttons: dialog.buttons,
+      defaultId: dialog.defaultId,
+      cancelId: dialog.cancelId,
+    }).then(
+      () => undefined,
+      () => undefined,
+    )
+    return false
   }
 
   reportRendererBoot(report: RendererBootReport): void {
+    const consumedByGate = this.rendererHealthGate !== undefined
     this.rendererHealthGate?.report(report)
     this.native(NATIVE_METHODS.reportRendererBoot, report)
+    if (report.status === 'failed' && !consumedByGate && this.rendererBootDialogTask === undefined) {
+      const task = this.showRendererBootRecovery(report).finally(() => {
+        if (this.rendererBootDialogTask === task) this.rendererBootDialogTask = undefined
+      })
+      this.rendererBootDialogTask = task
+    }
+  }
+
+  private async showRendererBootRecovery(
+    report: Extract<RendererBootReport, { status: 'failed' }>,
+  ): Promise<void> {
+    const copy = desktopNativeCopy(this.locale)
+    const plugins = report.plugins.length === 0
+      ? copy.unknownPlugin
+      : report.plugins.map(plugin => `- ${plugin}`).join('\n')
+    const error = report.error === undefined ? copy.missingPluginError : report.error
+    const result = await this.openDialog({
+      type: 'error',
+      title: copy.pluginRecoveryTitle,
+      message: copy.pluginRecoveryMessage,
+      detail: `${copy.failedPlugins}\n${plugins}\n\n${error}\n\n${copy.pluginRecoveryInstructions}`,
+      buttons: [copy.openTerminal, copy.restart, copy.dismiss],
+      defaultId: 0,
+      cancelId: 2,
+    })
+    if (result.response === 0) {
+      this.openTerminal()
+    } else if (result.response === 1) {
+      await this.requestRestart()
+    }
   }
 
   openProfileCreateWindow(options: ProfileCreateWindowOptions): void {
@@ -376,7 +626,9 @@ export class IpcDesktopRuntime implements DesktopRuntime {
   }
 
   setLocalePreference(preference: DesktopLocale | undefined): void {
-    this.locale = preference ?? this.locale
+    const locale = preference ?? desktopLocaleFromLanguageTag(this.systemLocaleTag())
+    if (locale === this.locale) return
+    this.locale = locale
     this.native(NATIVE_METHODS.setLocale, { locale: this.locale })
   }
 
@@ -385,15 +637,92 @@ export class IpcDesktopRuntime implements DesktopRuntime {
   }
 
   async requestRestart(): Promise<void> {
-    await this.transport.request(NATIVE_METHODS.restart)
+    if (this.quitting) return
+    if (this.restartRequest !== undefined) return this.restartRequest
+    const request = this.confirmAndRestart('normal').finally(() => {
+      if (this.restartRequest === request) this.restartRequest = undefined
+    })
+    this.restartRequest = request
+    await request
   }
 
   async requestRecoveryRestart(): Promise<void> {
-    await this.transport.request(NATIVE_METHODS.restartRecovery)
+    if (this.quitting) return
+    if (this.restartRequest !== undefined) return this.restartRequest
+    const request = this.confirmAndRestart('recovery').finally(() => {
+      if (this.restartRequest === request) this.restartRequest = undefined
+    })
+    this.restartRequest = request
+    await request
+  }
+
+  private async confirmAndRestart(target: 'normal' | 'recovery'): Promise<void> {
+    const copy = desktopRestartConfirmationCopy(this.locale, target)
+    const result = await this.openDialog({
+      type: 'question',
+      title: copy.title,
+      message: copy.message,
+      detail: copy.detail,
+      buttons: [copy.confirm, copy.cancel],
+      defaultId: 1,
+      cancelId: 1,
+    })
+    if (result.response !== 0) return
+    await this.transport.request(target === 'recovery' ? NATIVE_METHODS.restartRecovery : NATIVE_METHODS.restart)
   }
 
   prepareToQuit(): void {
+    this.quitting = true
+    this.stopRendererBootMonitoring()
     this.native(NATIVE_METHODS.prepareToQuit)
+  }
+
+  private async downloadUpdateInstaller(version: string, signal: AbortSignal): Promise<void> {
+    const copy = desktopNativeCopy(this.locale)
+    if (this.platform === 'win32') {
+      const install = await this.openDialog({
+        type: 'question',
+        title: copy.updateDownloadedTitle,
+        message: copy.updateReady(version),
+        detail: copy.windowsInstallQuestion,
+        buttons: [copy.restartAndInstall, copy.later],
+        defaultId: 1,
+        cancelId: 1,
+      })
+      if (install.response !== 0) return
+    }
+    const artifactName = this.platform === 'darwin'
+      ? `DSH-Desktop-${version}-mac.dmg`
+      : `DSH-Desktop-${version}-windows.exe`
+    const saved = await this.transport.request<{ path: string | null }>(NATIVE_METHODS.saveDialog, {
+      title: copy.saveInstallerTitle,
+      defaultPath: artifactName,
+      buttonLabel: copy.saveAndDownload,
+    })
+    const destination = saved.path
+    if (destination === null || destination.length === 0) return
+    const path = await downloadDesktopUpdate({
+      platform: this.platform === 'win32' ? 'win32' : 'darwin',
+      version,
+      destinationPath: destination,
+      request: this.updatesRequest,
+      signal,
+    })
+    await this.transport.request(NATIVE_METHODS.openUpdate, { path })
+    if (this.platform === 'darwin') {
+      await this.openDialog({
+        type: 'info',
+        title: copy.updateDownloadedTitle,
+        message: copy.updateReady(version),
+        detail: copy.macInstallInstructions,
+        buttons: [copy.ok],
+        defaultId: 0,
+        cancelId: 0,
+      }).then(
+        () => undefined,
+        () => undefined,
+      )
+    }
   }
 
   async openDialog(options: DesktopDialogOptions): Promise<DesktopDialogResult> {

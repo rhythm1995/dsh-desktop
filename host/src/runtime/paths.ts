@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,7 +8,12 @@ export function dshPluginDesktopRoot(
 ): string {
   const explicit = environment.DSH_PLUGIN_DESKTOP_ROOT
   if (explicit !== undefined && explicit.length > 0) return explicit
-  return join(dirname(fileURLToPath(import.meta.url)), '../../../anywhere-labs-dsh-desktop/dsh-plugin-desktop')
+  const here = dirname(fileURLToPath(import.meta.url))
+  const dotted = join(here, '../../../.anywhere-labs-dsh-desktop/dsh-plugin-desktop')
+  const undotted = join(here, '../../../anywhere-labs-dsh-desktop/dsh-plugin-desktop')
+  if (existsSync(join(dotted, 'lib/tauri-host.js'))) return dotted
+  if (existsSync(join(undotted, 'lib/tauri-host.js'))) return undotted
+  return dotted
 }
 
 export function defaultDesktopUserDataDirectory(

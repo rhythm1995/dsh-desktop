@@ -11,6 +11,7 @@ import { writeListenManifest } from './runtime/listen-manifest.ts'
 import { LogJournal } from './runtime/log-journal.ts'
 import { NetworkJournal } from './runtime/network-journal.ts'
 import { IpcDesktopRuntime } from './runtime/ipc-desktop-runtime.ts'
+import { desktopTrayLabel } from './runtime/dialog-copy.ts'
 import { loadNativeBootstrap, writeNativeBootstrap } from './runtime/native-bootstrap.ts'
 import { installDesktopNodeRuntime } from './runtime/node-runtime-environment.ts'
 import { officialHostEntry } from './runtime/official-host.ts'
@@ -52,6 +53,7 @@ export async function runHostMain(options: HostMainOptions): Promise<HostMainHan
   const windowsBuild = platform === 'win32' ? windowsBuildNumber() : undefined
   const runtime = new IpcDesktopRuntime(options.transport, {
     platform,
+    userDataDir,
     ...(windowsBuild === undefined ? {} : { windowsBuild }),
   })
 
@@ -86,6 +88,7 @@ export async function runHostMain(options: HostMainOptions): Promise<HostMainHan
     carrier = await startLoopbackCarrier({
       pageTitle: PRODUCT_NAME,
       devtools: { enabled: devtoolsEnabled, logs, network },
+      onRendererBootReport: report => { runtime.reportRendererBoot(report) },
     })
   } catch (cause) {
     options.transport.notify(NATIVE_EVENTS.sidecarFailed, {
@@ -142,29 +145,50 @@ export async function runHostMain(options: HostMainOptions): Promise<HostMainHan
   }
 
   const release = runtime.schedule(payload)
+  // The placeholder page reports boot health over the loopback POST route;
+  // the official Host path blocks on its own DesktopRendererHealthGate instead.
+  const rendererBoot = runtime.beginRendererBootMonitoring(
+    { commitHealthy: async () => undefined },
+    30_000,
+  )
+  void rendererBoot.then(
+    verdict => {
+      if ('failureReason' in verdict) {
+        logs.append({
+          level: 'error',
+          source: 'host',
+          message: 'renderer boot failed',
+          data: { reason: verdict.failureReason },
+        })
+      }
+    },
+    () => undefined,
+  )
   await runtime.mountScheduled(() => {
     writeNativeBootstrap(userDataDir, profileName, bootstrap.mode)
-    runtime.reportRendererBoot({ status: 'healthy' })
   })
   await runtime.persistBootstrap(profileName, bootstrap.mode)
   runtime.registerTrayItem({
     group: 'tools',
     order: 10,
-    label: () => 'Open Terminal',
+    label: () => desktopTrayLabel(runtime.locale, 'openTerminal'),
     invoke: () => { runtime.openTerminal() },
   })
   runtime.registerTrayItem({
     group: 'status',
     order: 20,
-    label: () => 'Export Diagnostics…',
+    label: () => desktopTrayLabel(runtime.locale, 'exportDiagnostics'),
     invoke: () => { void runtime.exportDiagnostics() },
   })
   runtime.registerTrayItem({
     group: 'status',
     order: 30,
-    label: () => 'Check for Updates…',
+    label: () => desktopTrayLabel(runtime.locale, 'checkForUpdates'),
     invoke: () => {
-      runtime.notifyAttention({ title: 'DSH Desktop', body: 'Checking for updates' })
+      runtime.notifyAttention({
+        title: PRODUCT_NAME,
+        body: runtime.locale === 'zh' ? '正在检查更新…' : 'Checking for updates…',
+      })
     },
   })
   if (devtoolsEnabled) {

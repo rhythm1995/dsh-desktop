@@ -12,6 +12,10 @@ export { loadProfileState, parseProfileState } from './runtime/profile-state.ts'
 export { installDesktopNodeRuntime, posixPnpmShim, windowsPnpmShim } from './runtime/node-runtime-environment.ts'
 export { exportDiagnosticsArchive } from './runtime/diagnostics.ts'
 export { recordTerminalLaunch } from './runtime/terminal-launch.ts'
+export {
+  desktopTerminalStateDirectory,
+  prepareDesktopTerminal,
+} from './runtime/desktop-terminal.ts'
 export { downloadDesktopUpdate } from './runtime/update-download.ts'
 export { applyRecoveryAction, applyProfileSelection } from './runtime/recovery-actions.ts'
 export { planWindowGeneration, folderDropScript, shouldOpenExternally, openExternalHref } from './runtime/window-ops.ts'

@@ -1,3 +1,6 @@
+import { lstatSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { NATIVE_EVENTS, NATIVE_METHODS } from '../src/rpc/protocol.ts'
 import { LoopbackRpcTransport } from '../src/rpc/transport.ts'
@@ -62,6 +65,7 @@ describe('IpcDesktopRuntime generation lifecycle', () => {
     const runtime = new IpcDesktopRuntime(transport, { platform: 'darwin' })
     runtime.schedule({
       ...payload('http://127.0.0.1:4242/'),
+      rendererAccessHeader: { name: 'x-dsh-desktop-renderer', value: 'A'.repeat(43) },
       readLocalePreference: () => 'zh',
       readThemeSource: () => 'dark',
       requestQuit: () => undefined,
@@ -69,6 +73,47 @@ describe('IpcDesktopRuntime generation lifecycle', () => {
     })
     await runtime.mountScheduled()
     expect(urls).toEqual(['http://127.0.0.1:4242/'])
+    runtime.dispose()
+  })
+
+  it('forwards the generation renderer access header to the native shell', async () => {
+    const headers: unknown[] = []
+    const transport = new LoopbackRpcTransport(async (method, params) => {
+      if (method === NATIVE_METHODS.schedule) {
+        headers.push((params as { rendererAccessHeader?: unknown }).rendererAccessHeader)
+        expect('rendererAccessHeader' in (params as object)).toBe(true)
+        return { generationId: 'g-header' }
+      }
+      return { ok: true }
+    })
+    const runtime = new IpcDesktopRuntime(transport, { platform: 'darwin' })
+    const header = { name: 'x-dsh-desktop-renderer', value: 'b'.repeat(43) } as const
+    runtime.schedule({
+      ...payload('http://127.0.0.1:4242/'),
+      rendererAccessHeader: header,
+      readLocalePreference: () => 'en',
+      readThemeSource: () => 'system',
+      requestQuit: () => undefined,
+      requestModeChange: async () => undefined,
+    })
+    await runtime.mountScheduled()
+    expect(headers).toEqual([header])
+    runtime.dispose()
+  })
+
+  it('omits rendererAccessHeader when the scheduled payload carries none', async () => {
+    const paramsSeen: object[] = []
+    const transport = new LoopbackRpcTransport(async (method, params) => {
+      if (method === NATIVE_METHODS.schedule) {
+        paramsSeen.push((params ?? {}) as object)
+        return { generationId: 'g-plain' }
+      }
+      return { ok: true }
+    })
+    const runtime = new IpcDesktopRuntime(transport, { platform: 'darwin' })
+    runtime.schedule(payload())
+    await runtime.mountScheduled()
+    expect('rendererAccessHeader' in paramsSeen[0]!).toBe(false)
     runtime.dispose()
   })
 
@@ -93,6 +138,44 @@ describe('IpcDesktopRuntime generation lifecycle', () => {
     transport.emit(NATIVE_EVENTS.trayInvoke, { id: 'tray-1' })
     await Promise.resolve()
     expect(invoked).toEqual(['terminal'])
+    runtime.dispose()
+  })
+
+  it('prepares an executable welcome.command before asking native to open Terminal', async () => {
+    const calls: Array<{ method: string, params: Record<string, unknown> }> = []
+    const transport = new LoopbackRpcTransport(async (method, params) => {
+      calls.push({ method, params: (params ?? {}) as Record<string, unknown> })
+      return { ok: true }
+    })
+    const userDataDir = mkdtempSync(join(tmpdir(), 'dsh-runtime-term-'))
+    const runtime = new IpcDesktopRuntime(transport, {
+      platform: 'darwin',
+      userDataDir,
+      currentVersion: '2.0.0',
+      terminalRuntime: {
+        nodeExecutable: process.execPath,
+        dshBootstrapPath: join(userDataDir, 'desktop-cli.js'),
+        pnpmBinPath: join(userDataDir, 'pnpm.mjs'),
+        nodeVersion: process.versions.node,
+        productVersion: '2.0.0',
+      },
+    })
+    runtime.configureTerminal({
+      profileName: 'desktop',
+      profileDir: '/tmp/profile',
+      homeDir: '/tmp/home',
+    })
+    runtime.openTerminal()
+    await new Promise(resolve => setImmediate(resolve))
+    const opened = calls.find(call => call.method === NATIVE_METHODS.openTerminal)
+    expect(opened).toBeDefined()
+    const scriptPath = opened?.params.scriptPath
+    expect(typeof scriptPath).toBe('string')
+    expect(String(scriptPath).endsWith('welcome.command')).toBe(true)
+    expect(opened?.params.command).toEqual(['open', '-a', 'Terminal', scriptPath])
+    if (process.platform !== 'win32') {
+      expect(lstatSync(String(scriptPath)).mode & 0o777).toBe(0o700)
+    }
     runtime.dispose()
   })
 })

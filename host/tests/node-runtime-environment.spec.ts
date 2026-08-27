@@ -27,6 +27,8 @@ describe('Node Host command shims', () => {
     expect(windows).toContain('npm_config_runtime=node')
     expect(posix).toContain('/usr/bin/node')
     expect(windows).toContain('C:\\node\\node.exe')
+    expect(posix).toContain('--config.minimumReleaseAge=0')
+    expect(windows).toContain('--config.minimumReleaseAge=0')
   })
 
   it('installs a public pnpm shim on PATH', () => {

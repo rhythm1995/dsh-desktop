@@ -81,11 +81,4 @@ CI/CD 用 GitHub Actions（见 [`docs/github-actions-cicd.md`](docs/github-actio
 
 ## 文档
 
-| 文档 | 内容 |
-| --- | --- |
-| [`docs/README.md`](docs/README.md) | 文档索引与写作约束 |
-| [`docs/tauri-v2-sidecar-migration.md`](docs/tauri-v2-sidecar-migration.md) | 架构：为什么换壳、进程怎么拆、归属权 |
-| [`docs/electron-parity-gaps.md`](docs/electron-parity-gaps.md) | 相对 Electron 原版的壳层缺口清单 |
-| [`docs/kernel-sync.md`](docs/kernel-sync.md) | 内核与原始桌面项目的同步流程 |
-| [`docs/devtools-listen.md`](docs/devtools-listen.md) | 开发模式的日志 / 网络监听 |
-| [`docs/github-actions-cicd.md`](docs/github-actions-cicd.md) | CI/CD 说明 |
+完整目录与「同一事实只写一处」的约定见 [`docs/README.md`](docs/README.md)。架构细节见 [`docs/tauri-v2-sidecar-migration.md`](docs/tauri-v2-sidecar-migration.md)。

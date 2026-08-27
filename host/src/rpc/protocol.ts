@@ -60,6 +60,9 @@ export const NATIVE_METHODS = {
   reportRendererBoot: 'shell.reportRendererBoot',
   writeBootstrap: 'shell.writeBootstrap',
   openDevtools: 'shell.openDevtools',
+  revealItem: 'shell.revealItem',
+  openUpdate: 'shell.openUpdate',
+  saveDialog: 'shell.saveDialog',
 } as const
 
 export const NATIVE_EVENTS = {

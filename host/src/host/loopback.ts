@@ -16,6 +16,7 @@ export interface LoopbackDevtools {
 export interface LoopbackOptions {
   readonly pageTitle?: string
   readonly devtools?: LoopbackDevtools
+  readonly onRendererBootReport?: (report: { status: 'healthy' } | { status: 'failed', plugins: string[], error?: string }) => void
 }
 
 export interface LoopbackCarrier {
@@ -117,6 +118,11 @@ export function startLoopbackCarrier(input: string | LoopbackOptions = 'DSH Desk
         return
       }
       if (url.pathname === RENDERER_BOOT_REPORT_PATH && req.method === 'POST') {
+        readBootReport(req)
+          .then(report => {
+            if (report !== null) devtoolsOnBoot(options, report)
+          })
+          .catch(() => undefined)
         res.writeHead(204)
         res.end()
         finish(204)
@@ -147,25 +153,32 @@ export function startLoopbackCarrier(input: string | LoopbackOptions = 'DSH Desk
       <p>Host loopback is running. The official DSH Web client loads here when the upstream Host is composed.</p>
       <div data-dsh-workspace-drop-target>Drop one folder to add a workspace.</div>
     </main>
-    <script>
-      window.addEventListener('dsh-desktop-folder-drop', (event) => {
-        const detail = event.detail || {}
-        const paths = detail.paths || []
-        const target = document.querySelector('[data-dsh-workspace-drop-target]')
-        if (target) target.textContent = paths.length === 1 ? paths[0] : 'Drop exactly one folder'
-        window.__DSH_DESKTOP_FILE_PATH__ = { getPathForFile: function () { return paths[0] || '' } }
-      })
-      document.addEventListener('click', (event) => {
-        const node = event.target && event.target.closest ? event.target.closest('a[href]') : null
-        if (!node) return
-        const href = node.getAttribute('href') || ''
-        if (href.startsWith('http') && !href.startsWith(location.origin)) {
-          event.preventDefault()
-        }
-      })
-    </script>
-  </body>
-</html>`)
+      <script>
+        window.addEventListener('dsh-desktop-folder-drop', (event) => {
+          const detail = event.detail || {}
+          const paths = detail.paths || []
+          const target = document.querySelector('[data-dsh-workspace-drop-target]')
+          if (target) target.textContent = paths.length === 1 ? paths[0] : 'Drop exactly one folder'
+          window.__DSH_DESKTOP_FILE_PATH__ = { getPathForFile: function () { return paths[0] || '' } }
+        })
+        try {
+          fetch(${JSON.stringify(RENDERER_BOOT_REPORT_PATH)}, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ status: 'healthy' }),
+          }).catch(function () {})
+        } catch (error) {}
+        document.addEventListener('click', (event) => {
+          const node = event.target && event.target.closest ? event.target.closest('a[href]') : null
+          if (!node) return
+          const href = node.getAttribute('href') || ''
+          if (href.startsWith('http') && !href.startsWith(location.origin)) {
+            event.preventDefault()
+          }
+        })
+      </script>
+    </body>
+  </html>`)
       finish(200)
     })
     server.once('error', reject)
@@ -182,4 +195,41 @@ export function startLoopbackCarrier(input: string | LoopbackOptions = 'DSH Desk
       })
     })
   })
+}
+
+const MAX_BOOT_REPORT_BYTES = 16 * 1024
+
+type RendererBootReportPayload =
+  | { status: 'healthy' }
+  | { status: 'failed', plugins: string[], error?: string }
+
+async function readBootReport(req: IncomingMessage): Promise<RendererBootReportPayload | null> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of req) {
+    size += (chunk as Buffer).byteLength
+    if (size > MAX_BOOT_REPORT_BYTES) return null
+    chunks.push(chunk as Buffer)
+  }
+  let value: unknown
+  try {
+    value = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  } catch {
+    return null
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as { status?: unknown, plugins?: unknown, error?: unknown }
+  if (record.status === 'healthy') return { status: 'healthy' }
+  if (record.status !== 'failed') return null
+  if (!Array.isArray(record.plugins) || record.plugins.some(item => typeof item !== 'string')) return null
+  if (record.error !== undefined && typeof record.error !== 'string') return null
+  return {
+    status: 'failed',
+    plugins: record.plugins as string[],
+    ...(record.error === undefined ? {} : { error: record.error }),
+  }
+}
+
+function devtoolsOnBoot(options: LoopbackOptions, report: RendererBootReportPayload): void {
+  options.onRendererBootReport?.(report)
 }

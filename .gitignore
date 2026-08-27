@@ -1,5 +1,7 @@
-# Local checkout of upstream product source; not part of this repo.
+# Local checkouts of upstream product and kernel; not part of this repo.
 anywhere-labs-dsh-desktop/
+.anywhere-labs-dsh-desktop/
+.deepseek-harness/
 
 node_modules/
 host/dist/
@@ -10,6 +12,7 @@ host/upstream/.app-verify/
 src-tauri/target/
 src-tauri/gen/
 native-ui/assets/*.map
+.zcode/
 error
 *.log
 .DS_Store
