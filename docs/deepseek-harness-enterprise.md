@@ -1,6 +1,6 @@
 # DeepSeek Harness 企业级落地与办公插件生态调研
 
-> 调研文档，**不是本仓库实现规格**。本仓库只做 Tauri 桌面壳。入口：[`README.md`](README.md)。管理后台对标见 [`enterprise-admin-console.md`](enterprise-admin-console.md)。
+> 调研文档，**不是本仓库实现规格**。本仓库只做 Tauri 桌面壳。入口：[`README.md`](README.md)。管理后台对标见 [`enterprise-admin-console.md`](enterprise-admin-console.md)。**pin 策略已改为跟随 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 最新 `dsh-v*` 标签**（见 [`kernel-sync.md`](kernel-sync.md)）；下文 2026-08-26 的星数与「anywhere-labs 与 pin 一致」是当时调研事实，不是现行同步手续。
 
 调研日期：2026-08-26（当日三轮：第一轮盘点生态全景，第二轮全量重核硬数据 + 治理类插件逐个深挖用途，第三轮补强 AgentKit 能力全景、办公/IM/桌面插件逐项核实、客户端发行形态与目录站普查）。对象是本地检出 `.deepseek-harness/`（deepseek-ai/deepseek-harness 官方内核，MIT）以及它对应的社区插件生态：dshmarket.com、deepseek1024.com、dshfind.com 三家主要插件目录（第三轮另发现三家小型目录站，见 §0）+ GitHub。
 

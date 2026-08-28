@@ -137,7 +137,7 @@ describe('Host native product effects', () => {
     expect(linux.mode).toBe('compatibility')
     expect(linux.titlebarHeight).toBe(36)
     expect(linux.material).toBe('off')
-    const advanced = planWindowGeneration('darwin', 'advanced', 'transparent', 'acrylic', undefined, 9)
+    const advanced = planWindowGeneration('darwin', 'advanced', 'transparent', 'off', undefined, 9)
     expect(advanced.titlebarHeight).toBe(32)
     expect(advanced.zoomLevel).toBe(4)
     const script = folderDropScript(['/Users/me/proj'], 12, 40)

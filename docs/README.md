@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 架构说明 | [`tauri-v2-sidecar-migration.md`](tauri-v2-sidecar-migration.md) | 为什么换壳、进程怎么拆、归属权。已落地，不再当待办清单。 |
 | 产品缺口 | [`electron-parity-gaps.md`](electron-parity-gaps.md) | 相对 Electron 原版，壳层还缺什么、已经齐了什么。 |
-| 上游同步 | [`kernel-sync.md`](kernel-sync.md) | 怎么拉 `.deepseek-harness` 与 `.anywhere-labs-dsh-desktop`。pin 只写在 [`kernel-pin.json`](kernel-pin.json)。 |
+| 上游同步 | [`kernel-sync.md`](kernel-sync.md) | 怎么拉官方 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)、跟随最新 `dsh-v*` 标签。pin 只写在 [`kernel-pin.json`](kernel-pin.json)。anywhere-labs 不是 pin 来源。 |
 | 弹窗满窗口化 | [`settings-fullscreen.md`](settings-fullscreen.md) | 设置与插件市场弹窗改满窗口 + 返回工作区的注入脚本适配、锚点降级策略、市场已安装 502 根因记录。 |
 | 开发监听 | [`devtools-listen.md`](devtools-listen.md) | 何时是开发模式、日志/网络 NDJSON、AI 怎么听。 |
 | CI/CD | [`github-actions-cicd.md`](github-actions-cicd.md) | `ci.yml` / `release.yml` 做什么、怎么发版。开发/生产开关以 devtools 文档为准。 |

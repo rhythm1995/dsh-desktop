@@ -939,8 +939,6 @@ fn refresh_theme_material(app: &AppHandle) {
         // recomposed; reapplying the active material invalidates it.
         if material == "mica" {
             let _ = window_vibrancy::apply_mica(&window, None);
-        } else if material == "acrylic" {
-            let _ = window_vibrancy::apply_acrylic(&window, Some((32, 32, 32, 204)));
         }
     }
     #[cfg(not(target_os = "windows"))]
@@ -1291,9 +1289,6 @@ fn apply_material(window: &tauri::WebviewWindow, material: &str) {
     }
     #[cfg(target_os = "windows")]
     {
-        if material == "acrylic" {
-            let _ = window_vibrancy::apply_acrylic(window, Some((32, 32, 32, 204)));
-        }
         if material == "mica" {
             let _ = window_vibrancy::apply_mica(window, None);
         }

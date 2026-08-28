@@ -16,13 +16,13 @@
 | Job | Runner | 步骤 |
 | --- | --- | --- |
 | `host` | `ubuntu-latest` | `pnpm install --frozen-lockfile` → `pnpm build:host` → `pnpm typecheck` → `pnpm test` |
-| `shell` | `macos-latest` | `pnpm install --frozen-lockfile` → `pnpm build:host` → `cargo check --all-targets` → `cargo test`（工作目录 `src-tauri/`，带 `Swatinem/rust-cache`） |
+| `shell` | `macos-latest` | `pnpm install --frozen-lockfile` → 缓存 `vendor/runtimes`（key 含 `runtimes.lock.json`）→ `pnpm fetch:runtimes` → `pnpm build:host` → `cargo check --all-targets` → `cargo test`（工作目录 `src-tauri/`，带 `Swatinem/rust-cache`） |
 
 - Host 是 TypeScript；成品跑的是打进 `.app` 的 Bun/Node，测试与 `tsc` 仍用 runner 上的 Node。`host` job 在 ubuntu；`shell` job 用 `macos-latest`。
-- 两个 job 都要先 `pnpm build:host`：`host/tests/host-entry-launch.spec.ts` 需要 `host/dist/main.js`；`tauri-build` 会校验 `bundle.resources`（`../host/dist` 与 `../vendor/runtimes` 目录）必须存在。`vendor/runtimes/.gitkeep` 让 `cargo check` 通过；真正的 `bun`/`node` 由 `pnpm fetch:runtimes` 写入，`tauri build` 的 `beforeBuildCommand` 会跑它。
-- 应用内运行时 pin 在 `scripts/runtimes.lock.json`（Node 22.20.0 + Bun 1.4.0）。`release.yml` 用 cache 避免每次重下。
+- 两个 job 都要先 `pnpm build:host`：`host/tests/host-entry-launch.spec.ts` 需要 `host/dist/main.js`；`tauri-build` 会校验 `bundle.resources`（`../host/dist`、`../native-ui`、`../vendor/runtimes`）必须存在。`shell` job 因此在 `cargo check` 前先用 `actions/cache`（key 含 `scripts/runtimes.lock.json`）命中缓存，再 `pnpm fetch:runtimes` 把真正的 `bun`/`node` 写入 `vendor/runtimes`；仓库内的 `vendor/runtimes/.gitkeep` 只保证本地离线 `cargo check` 也能过。
+- 应用内运行时 pin 在 `scripts/runtimes.lock.json`（Node 22.20.0 + Bun 1.4.0）。`shell` job 与 `release.yml` 都缓存 `vendor/runtimes`，避免每次重下。
 - Node 版本固定 `22`（`package.json` 的 `engines` 要求 `^22.19.0 || >=24.0.0`）；pnpm 版本由 `pnpm/action-setup` 从 `package.json` 的 `packageManager` 字段读取。
-- `pnpm test` 里 `official-host.spec.ts` 的集成用例依赖 git 忽略的上游 `dsh-plugin-desktop` 检出，CI 上没有该检出时自动跳过（`it.skipIf`），不算失败。
+- 默认 CI **不**克隆 `.deepseek-harness` 或 anywhere-labs。`pnpm test` 含 pin 契约与 `dsh-v*` 选 tag（读仓库内 `docs/kernel-pin.json`，不打网）。`official-host.spec.ts` 的集成用例依赖 git 忽略的适配器 `dsh-plugin-desktop` 检出，CI 上没有该检出时自动跳过（`it.skipIf`），不算失败。
 - 生产语义在 CI 自动生效：`GITHUB_ACTIONS=true` 时 `write-build-profile.mjs` 生成 `COMPILED_DEV_TOOLS=false`（见 `docs/devtools-listen.md`）。
 
 ## CD：`release.yml`

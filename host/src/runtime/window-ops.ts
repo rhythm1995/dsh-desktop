@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { FOLDER_DROP_EVENT } from './file-path-bridge.ts'
 import { chromeGeometry } from './window-chrome.ts'
 import { effectiveDesktopWindowMaterial } from './window-material.ts'
-import type { DesktopPlatform, DesktopShellMode, DesktopWindowMaterial, MacosWindowMaterial, WindowsWindowMaterial } from './types.ts'
+import type { DesktopPlatform, DesktopShellMode, DesktopWindowMaterial, MacosWindowMaterial, PersistedWindowsWindowMaterial } from './types.ts'
 
 export interface WindowBounds {
   readonly x: number
@@ -134,7 +134,7 @@ export function planWindowGeneration(
   platform: DesktopPlatform,
   requestedMode: DesktopShellMode,
   macosMaterial: MacosWindowMaterial,
-  windowsMaterial: WindowsWindowMaterial,
+  windowsMaterial: PersistedWindowsWindowMaterial,
   windowsBuild: number | undefined,
   zoom: number,
   bounds?: WindowBounds,

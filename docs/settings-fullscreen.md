@@ -1,6 +1,6 @@
 # 内核弹窗满窗口化（设置 / 插件市场：弹窗 → 满窗口）
 
-内核把设置渲染成主窗口页面里的居中弹窗（800px 圆角面板 + 遮罩，见 `.deepseek-harness/packages/client/ui-settings-general/src/client/SettingsRoot.tsx`），插件市场也是同类居中弹窗（800×700 的 `section`，`dsh-community-market/src/client/MarketOverlay.tsx`）。产品形态要求参考官方新版样式：两者都铺满整窗、设置左上角有「← 返回工作区」。由于内核按 pin 只检出、不改文件，这个形态由 Tauri 层的**注入脚本适配**实现，不改内核源码，也不新建 OS 窗口。
+内核把设置渲染成主窗口页面里的居中弹窗（800px 圆角面板 + 遮罩，见 `.deepseek-harness/packages/client/ui-settings-general/src/client/SettingsRoot.tsx`），插件市场也是同类居中弹窗（800×700 的 `section`，见市场社区包 `dsh-community-market` 源码 `src/client/MarketOverlay.tsx`——该包不在 harness 内核里，仓库是 anywhere-labs/deepseek-harness-desktop，本机是适配器 node_modules 里的 npm 包）。产品形态要求参考官方新版样式：两者都铺满整窗、设置左上角有「← 返回工作区」。由于内核按 pin 只检出、不改文件，这个形态由 Tauri 层的**注入脚本适配**实现，不改内核源码，也不新建 OS 窗口。
 
 ## 实现
 
@@ -19,13 +19,13 @@
 - 两类弹窗都从 `[role="dialog"][aria-modal="true"]` 候选里区分：
   - 设置面板唯一签名：`aria-labelledby` 指向的标题节点位于 `panel :scope > nav` 内部（引导向导等其他弹窗不满足该结构）；
   - 插件市场唯一签名：对话框元素自身的第一个子元素是 mask `<button>`（带 aria-label）且含 `:scope > section` 面板；
-- 任何一步失配 → 找不到目标 → 什么都不做，静默退化回原弹窗。kernel-sync 升级若改了外壳，功能不坏，只是形态回退。
+- 任何一步失配 → 找不到目标 → 什么都不做，静默退化回原弹窗。跟随新的 harness `dsh-v*` 标签若改了外壳，功能不坏，只是形态回退。
 
 观察器只开 `childList`，不开 `attributes`，配合 rAF 合帧，避免脚本自身写属性造成的反馈循环。市场的关闭路径保留其自带 X 按钮与 Escape；市场满窗口后原点遮罩区域已不存在，遮罩按钮隐藏属预期。
 
 ## 已安装清单 502 的根因（2026-08-27 修复记录）
 
-「插件市场 → 已安装」报「暂时无法读取当前配置的插件清单」，实为 `.anywhere-labs-dsh-desktop` 内两个包**编译产物契约错位**：`dsh-plugin-desktop/lib`（随上游同步重建）的 `DesktopPluginsService.list()` 返回含 `uninstallable` 的 5 字段形状，而 `dsh-community-market/lib`（停留在旧构建）的 `reconcileInstallations` 用 `exactKeys` 只认 4 字段 → 全部条目校验失败 → `/api/community-market/installations` 返回 502 `operation-failed: The desktop plugin inventory was invalid.`。处理：在 `dsh-community-market` 目录重跑构建四步（clean / generate-contract-types / tsdown / tsc），使产物契约对齐；该包 vitest 268 通过。这类错位的通病是上游仓库各包 `lib` 构建时间不一致，kernel-sync 后如遇运行时行为与源码不符，先比对相关包 `lib/` 的 mtime 与源码差异。
+「插件市场 → 已安装」报「暂时无法读取当前配置的插件清单」，实为适配器检出里两个包**编译产物契约错位**：`dsh-plugin-desktop/lib` 的 `DesktopPluginsService.list()` 返回含 `uninstallable` 的 5 字段形状，而 `dsh-community-market/lib`（停留在旧构建）的 `reconcileInstallations` 用 `exactKeys` 只认 4 字段 → 全部条目校验失败 → `/api/community-market/installations` 返回 502 `operation-failed: The desktop plugin inventory was invalid.`。处理：在 `dsh-community-market` 目录重跑构建四步（clean / generate-contract-types / tsdown / tsc），使产物契约对齐；该包 vitest 268 通过。这是适配器 `lib/` 错位，**不阻塞**内核 pin。kernel-sync 后如遇运行时行为与源码不符，先比对相关包 `lib/` 的 mtime 与源码差异。
 
 ## 验证清单
 

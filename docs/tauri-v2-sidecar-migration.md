@@ -4,7 +4,7 @@
 
 **已落地。** 不是把 Electron 应用翻译成 Tauri，而是换壳保核：Tauri v2 管窗口、托盘、安装器；JS Host（Cordis + DSH + 插件 + pnpm）是长驻进程。运行时优先 Bun，没有可用的 Bun 时回退 Node。包管理仍是 pnpm，不要换成 `bun install`。代码目录叫 `host/`，不要用 sidecar 当目录名。
 
-分析基于 git 忽略的检出 `.anywhere-labs-dsh-desktop/`（`dsh-plugin-desktop@2.0.3`）和 `.deepseek-harness/`（pin 见 `kernel-pin.json`）。
+分析基于 git 忽略的检出：`.deepseek-harness/`（内核，pin 见 `kernel-pin.json`，跟随最新 `dsh-v*` 标签）和可选的 `.anywhere-labs-dsh-desktop/`（`dsh-plugin-desktop` 适配器 + Electron 形态对照，**不是** pin 来源）。
 
 ## 为什么这样拆
 
@@ -48,14 +48,15 @@ stdout 只走 JSON-RPC；Host 日志走 stderr。
 
 ## 本仓库改什么 / 不改什么
 
-改：`src-tauri/`、`host/`、`native-ui/`。官方 Host 从 `.anywhere-labs-dsh-desktop/dsh-plugin-desktop` 引入（`DSH_PLUGIN_DESKTOP_ROOT`），注入文件是 `host/upstream/tauri-host.ts`。
+改：`src-tauri/`、`host/`、`native-ui/`。官方 Host 启动器仍从可选检出 `dsh-plugin-desktop` 引入（`DSH_PLUGIN_DESKTOP_ROOT`），注入文件是 `host/upstream/tauri-host.ts`。内核版本以 `docs/kernel-pin.json` 为准，跟随 harness `dsh-v*` 标签。
 
 不改：内核树、社区插件契约、官方 Web client DOM、profile/checkpoint/recovery **语义**、npm `dsh-plugin-desktop` CLI 启动器。
 
 ## 源码位置
 
-- 检出：`.anywhere-labs-dsh-desktop/`、`.deepseek-harness/`（均 gitignore）
-- 上游 seam：`dsh-plugin-desktop/src/runtime.ts`、`electron-runtime.ts`、`electron-shell-generation.ts`、`main.ts`
+- 内核检出：`.deepseek-harness/`（gitignore；同步见 [`kernel-sync.md`](kernel-sync.md)）
+- 适配器 / Electron 对照（可选）：`.anywhere-labs-dsh-desktop/`（gitignore，不是 pin）
+- 适配器 seam：`dsh-plugin-desktop/src/runtime.ts`、`electron-runtime.ts`、`electron-shell-generation.ts`、`main.ts`
 
 | 论据 | 上游位置（相对 `dsh-plugin-desktop/`） |
 | --- | --- |

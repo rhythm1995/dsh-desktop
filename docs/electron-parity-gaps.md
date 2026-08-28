@@ -2,15 +2,15 @@
 
 目录：[`README.md`](README.md)。架构见 [`tauri-v2-sidecar-migration.md`](tauri-v2-sidecar-migration.md)。
 
-对照对象是本地检出 `.anywhere-labs-dsh-desktop/dsh-plugin-desktop/`（Electron 壳 + 官方 Host）。本仓库是 Tauri v2 壳 + JS Host（Bun 优先，否则 Node），目标是**产品形态一致**，不是把 Electron API 翻译过来。
+对照对象是 Electron 产品形态（可选检出 `.anywhere-labs-dsh-desktop/dsh-plugin-desktop/`）。本仓库是 Tauri v2 壳 + JS Host（Bun 优先，否则 Node），目标是**产品形态一致**，不是把 Electron API 翻译过来。内核 pin 跟随 harness 的 `dsh-v*` 标签，见 [`kernel-sync.md`](kernel-sync.md)，**不**等这个 Electron 仓库先 pin。
 
-核对日期：2026-08-27。依据是原版 `tests/` 与源码，以及本仓库 `host/`、`src-tauri/`、`native-ui/` 的实现。`.anywhere-labs-dsh-desktop` 已快进到 `681ba66091`（内核 pin 未变）。
+核对日期：2026-08-28。依据是 Electron 原版 `tests/` 与源码，以及本仓库 `host/`、`src-tauri/`、`native-ui/` 的实现。适配器检出若存在，当前是 `07633418c5`。
 
 优先级：下列缺口全部按产品缺口处理，不排期。补一项就把该项从「仍缺」挪到「已对齐」，并补上对应测试。原版测试在 `.anywhere-labs-dsh-desktop/dsh-plugin-desktop/tests/`，本仓库测试在 `host/tests/` 与 `src-tauri/src/*.rs`。
 
 架构分层（决定每个缺口改哪里）：
 
-- **上游插件层**（`.anywhere-labs-dsh-desktop/dsh-plugin-desktop/`）：官方 Host 启动时 `terminal.ts` / `diagnostics.ts` / `updates.ts` / `notifications.ts` / `profiles.ts` 等插件经 profile 组合进入 boot 图，经 `DesktopRuntime` 接口调用适配器。这一层的文案与流程（托盘标签、更新轮询、通知文案）属上游，不改。
+- **桌面适配器层**（`dsh-plugin-desktop`，可选检出 `.anywhere-labs-dsh-desktop/dsh-plugin-desktop/`）：官方 Host 启动时 `terminal.ts` / `diagnostics.ts` / `updates.ts` / `notifications.ts` / `profiles.ts` 等插件经 profile 组合进入 boot 图，经 `DesktopRuntime` 接口调用适配器。这一层的文案与流程（托盘标签、更新轮询、通知文案）属适配器，不改内核。
 - **Host 适配器层**（`host/src/`）：`IpcDesktopRuntime` 实现 `DesktopRuntime`，对应原版 `ElectronDesktopRuntime` 的职责——确认对话框、终端准备、诊断导出编排、重启确认都在这里。
 - **原生壳层**（`src-tauri/`）：`shell.*` RPC 的 Rust 侧，对应原版 `electron-shell-generation.ts` / `electron-platform.ts`——托盘渲染、应用菜单、窗口几何、通知呈现、生命周期都在这里。
 - 可测纯逻辑优先放 `host/src/runtime/`（vitest）或 `src-tauri/src/*.rs` 单测（cargo test）；只有必须碰 Tauri 实窗的接线留在 `lib.rs`。
@@ -32,7 +32,7 @@
 | 关窗隐藏、托盘退出才结束 | `electron-runtime.spec.ts` | `CloseRequested` 隐藏；托盘 Quit 与 `shell.prepareToQuit` 置 `quitting` |
 | Dock / 应用激活还原隐藏窗口 | `electron-runtime.spec.ts`（`activate` / `did-become-active`） | `RunEvent::Reopen` + `application_needs_reveal`（已在前台不抢焦） |
 | 36 / 32 px 标题栏几何常数 | `tests/window-options.spec.ts`、`tests/client-environment.spec.ts` | `host/tests/window-chrome.spec.ts`、`src-tauri/src/window_spec.rs` |
-| 材质能力门（Linux 仅 compatibility、Windows acrylic/mica） | `tests/window-material.spec.ts` | `host/tests/window-material.spec.ts`、`src-tauri/src/materials.rs` |
+| 材质能力门（Linux 仅 compatibility；Windows 仅 mica，acrylic 已移除并读成 off） | `tests/window-material.spec.ts` | `host/tests/window-material.spec.ts`、`src-tauri/src/materials.rs` |
 | 外链 http(s)/mailto vs loopback | `electron-runtime.spec.ts` | `window_ops.rs` + 点击拦截 |
 | Recovery / Dialog href 解析 | `tests/desktop-dialog-window.spec.ts`、recovery 测试 | `host/tests/dialog-recovery.spec.ts`、`dialog.rs`、`recovery.rs` |
 | 1 终端：Windows 经纪人、Linux 失败、启动失败对话框 | `tests/desktop-terminal.spec.ts` | `host/src/runtime/desktop-terminal.ts`（pwsh→powershell→cmd 探测、`launch.cmd` 经纪人、11 个环境键、脚本纯 ASCII、本地化路径只进 env、Linux 抛错不建 stateDir）；Rust spawn 失败→`terminal_launch_error_dialog`；Host prepare 失败→终端错误对话框。测试：`host/tests/desktop-terminal.spec.ts`（windows broker 组）、`host/tests/ipc-desktop-parity.spec.ts`、cargo `native_effects::tests` |
@@ -48,9 +48,9 @@
 | 11 Profile 创建 / Recovery / Dialog 窗口契约 | `tests/profile-create-window.spec.ts`、`tests/desktop-dialog-window.spec.ts` | `src-tauri/src/profile_create.rs`（`dsh-profile-create://submit?name=` ≤1024B 百分号解码 / `cancel`）；Profile 创建窗 480×360、min 420×330、`resizable(false)`、标题 New Profile/新建 Profile、macOS 先 unhide、失败不关窗派发 `dsh-profile-create-error`（中英文案）；Dialog 窗走官方 `native-ui/desktop-dialog.html`（state base64url 无填充 + platform/frame 查询），常规 480×300、min 420×200、max 宽 620，diagnostic 680×460、min 宽 560、max 宽 860，`dsh-desktop-dialog://layout?height=N` 上报渲染高度并钳制 [200,440]、`resizable(false)`、无框+父窗（`parent_raw`）+skip_taskbar；Recovery 800×760、min 680×560、按主窗 −48 夹。测试：cargo `profile_create::tests`、`dialog::tests`、`renderer_proxy` |
 | 16 渲染器准入（browser access 门） | `tests/desktop-browser-access.spec.ts`、`tests/webserver.spec.ts` | 上游 WebServer 现按 `x-dsh-desktop-renderer` 密钥头区分渲染器/普通浏览器，marker URL 无头即 403，launcher 必须提供 `ctx.desktopBrowserAccess`。本仓库：`tauri-host.ts` 迁移旧 openBrowser/LAN 设置并 provide；`DesktopShellPayload.rendererAccessHeader` 透传；Tauri 壳 `src-tauri/src/renderer_proxy.rs` 环回反代——首导航路径密钥=header 值、同源子资源凭 `Referer` 授权（`resolve_authorized_path`）、代理 `Origin` 重写为官方 origin、HTTP+WS 隧道、3xx Location 重写、HTML 改写仅留 content-length、`<head>` 注入 origin 重写脚本；`shell.schedule` 启动并改写 webview URL，`shell.release` 关停。实机已验证官方客户端完整启动（`startup.run.completed`）。测试：cargo `renderer_proxy::tests`、`host/tests/ipc-desktop-runtime.spec.ts` |
 | 12 Renderer 启动健康的产品 UX | `tests/renderer-health.spec.ts`、`renderer-boot.spec.ts` | `host/tests/renderer-health.spec.ts`（门状态机 9 用例：证据+mount 双条件、顺序无关、begin 前忽略、首失败锁定、超时、commit 失败拒绝、stop 后忽略、去重、非法超时）；`reportRendererBoot` 失败且无活动门时兜底插件恢复对话框（原版文案/按钮/defaultId 0 cancelId 2→openTerminal/restart）；占位 `main.ts` 接真实健康门 + 页面 POST 上报，不再假报 healthy。测试：`host/tests/renderer-health.spec.ts`、`host/tests/ipc-desktop-parity.spec.ts`（renderer boot 组）、`host/tests/loopback-host.spec.ts` |
-| 13 主题 / 语言作用到原生壳 | `tests/theme-presenter.spec.ts` | `IpcDesktopRuntime.setLocalePreference(undefined)` 回退系统语言（LC_ALL/LC_MESSAGES/LANG→Intl，`desktopLocaleFromLanguageTag`），相同不动；`shell.setLocale` 记录并重建托盘+应用菜单（后续对话框按 locale 取文案）；`shell.setTheme` Windows 重刷 mica/acrylic 材质。测试：`host/tests/ipc-desktop-parity.spec.ts`（locale fallback 组）、`host/tests/dialog-copy.spec.ts` |
+| 13 主题 / 语言作用到原生壳 | `tests/theme-presenter.spec.ts` | `IpcDesktopRuntime.setLocalePreference(undefined)` 回退系统语言（LC_ALL/LC_MESSAGES/LANG→Intl，`desktopLocaleFromLanguageTag`），相同不动；`shell.setLocale` 记录并重建托盘+应用菜单（后续对话框按 locale 取文案）；`shell.setTheme` Windows 重刷 mica 材质。测试：`host/tests/ipc-desktop-parity.spec.ts`（locale fallback 组）、`host/tests/dialog-copy.spec.ts` |
 | 14 键盘缩放与按 mode 红绿灯 | `electron-runtime.spec.ts` | `window_ops.rs` `zoom_shortcut`（keyDown only、ctrl/meta、排除 alt、`+`/`=`、`-`/`_`、`0` 复位）+ `ZOOM_SHORTCUT_SCRIPT` 页面注入 + `zoom_change` 命令（clamp [-4,4]、`documentElement.style.zoom`）；红绿灯按 `plan.chrome.titlebar_height`（36/32）在 mount 时应用。测试：cargo `window_ops::tests::zoom_shortcut_gates_keys_and_modifiers` |
-| 15 文件夹拖放到官方页面 | `tests/client-workspace-folder-drop.spec.ts` | `FILE_PATH_BRIDGE_SCRIPT` 在主窗所有页面（loopback + 官方 client）注入：原生 drop 的 CustomEvent 记录 paths，`window.__DSH_DESKTOP_FILE_PATH__.getPathForFile(file)` 在紧随的 HTML5 drop 事件返回单目录路径（空/多目录返回空串，由上游页面逻辑拒绝）。测试：cargo `window_ops::tests`（脚本契约）、`host/tests/file-path-bridge.spec.ts`（桥语义） |
+| 15 文件夹拖放到官方页面 | `tests/client-workspace-folder-drop.spec.ts` | `FILE_PATH_BRIDGE_SCRIPT` 在主窗所有页面（loopback + 官方 client）注入：原生 drop 的 CustomEvent 记录 paths，`window.__DSH_DESKTOP_FILE_PATH__.getPathForFile(file)` 在紧随的 HTML5 drop 事件返回单目录路径（空/多目录返回空串，由页面逻辑拒绝）。适配器侧 `12e88bf129` 修了侧栏与聊天拖放遮罩冲突（client + yarn patch），有检出时随 checkout 生效。测试：cargo `window_ops::tests`（脚本契约）、`host/tests/file-path-bridge.spec.ts`（桥语义） |
 
 ## 仍缺
 
@@ -58,7 +58,7 @@
 
 原版：`src/setup-wizard-window.ts`、`native-ui/setup-wizard/`、`tests/setup-wizard-window.spec.ts`。首次启动若无向导状态，打开独立窗口，经 `dsh-setup-wizard://complete|skip` 写回 mode / 材质 / 浏览器访问 / 网络暴露 / Market / 通知。2026-08-27 上游又扩大了它的范围：欢迎页、浏览器访问与 compatibility 模式联动（`dsh-desktop-` marker 门）、Windows 启动即显示（`show: platform === 'win32'`）、免锁原子写（`withFileLock` 全部退场）、`migrateDesktopBrowserAccessSettings` 首启迁移。
 
-现状：`.anywhere-labs-dsh-desktop` 已含向导源码，`lib/native-ui/setup-wizard.html` 已构建未接入。Tauri 壳没有对应窗口；`host/upstream/tauri-host.ts` 只接了迁移调用，不拦首启状态。
+现状：Electron 适配器检出里已有向导源码，`lib/native-ui/setup-wizard.html` 已构建未接入。Tauri 壳没有对应窗口；`host/upstream/tauri-host.ts` 只接了迁移调用，不拦首启状态。这是壳层缺口，不挡跟随 harness 标签。
 
 还差：辅助窗加载 `setup-wizard.html`、解析 `dsh-setup-wizard:` href、把结果交回 Host。测试写在 `host/tests` 解析函数 + cargo 开窗契约。
 
@@ -83,6 +83,6 @@ win32 专属 FFI（卷查询、`FlashWindow`、安装器拉起）在 macOS 交�
 
 1. 读原版测试断言的**产品契约**（文件名、权限位、文案、对话框按钮、尺寸）。
 2. 在 `host/tests/` 或 `src-tauri` 单测里用同一契约写失败用例。
-3. 实现只放 `host/`、`src-tauri/`、`native-ui/`，不要改 `.anywhere-labs-dsh-desktop` 里除 `tauri-host.ts` 注入以外的上游文件。
+3. 实现只放 `host/`、`src-tauri/`、`native-ui/`。不要改 `.deepseek-harness`。适配器检出里除注入 `tauri-host.ts` 外不要当内核源码改。
 
 已经这样同步过的例子：`host/tests/desktop-terminal.spec.ts` ← 原版 `desktop-terminal.spec.ts` 的 macOS 部分（Node shim，不是 `ELECTRON_RUN_AS_NODE`）。

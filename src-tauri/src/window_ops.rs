@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn advanced_macos_uses_compact_caption() {
-        let plan = plan_generation("darwin", "advanced", "transparent", "acrylic", None, 9, None);
+        let plan = plan_generation("darwin", "advanced", "transparent", "off", None, 9, None);
         assert_eq!(plan.chrome.titlebar_height, 32);
         assert_eq!(plan.chrome.macos_traffic_light_top, 16);
         assert_eq!(plan.material, "transparent");

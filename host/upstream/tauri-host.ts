@@ -61,7 +61,7 @@ import type {
 import { routeDesktopStartupFailure } from './startup-failure-routing.ts'
 import { DesktopStartupGeneration } from './startup-generation.ts'
 import { desktopInstallAnchor, prepareDesktopProfile } from './profile.ts'
-import { migrateDesktopBrowserAccessSettings } from './setup-wizard-settings.ts'
+import { migrateDesktopBrowserAccessSettings, migrateDesktopWindowMaterialSettings } from './setup-wizard-settings.ts'
 import { clearDesktopProfileCheckpoint, DesktopProfileCheckpoint } from './profile-checkpoint.ts'
 import { materializeProfile, ProfileMaterializationError } from './profile-materializer.ts'
 import type { DesktopPnpmBootstrap } from './pnpm.ts'
@@ -445,7 +445,16 @@ export async function startTauriHost(options: TauriHostOptions): Promise<void> {
       marketSelection,
       preparationHooks,
     )
-    if (await migrateDesktopBrowserAccessSettings(prepared.settingsDocument)) {
+    const browserAccessMigrated = await migrateDesktopBrowserAccessSettings(prepared.settingsDocument)
+    let windowMaterialMigrated = false
+    try {
+      windowMaterialMigrated = await migrateDesktopWindowMaterialSettings(prepared.settingsDocument)
+    } catch (cause) {
+      electronLogger.error(
+        `${BIN_NAME}: failed to persist removed Acrylic material migration: ${cause instanceof Error ? cause.message : String(cause)}`,
+      )
+    }
+    if (browserAccessMigrated || windowMaterialMigrated) {
       prepared = prepareDesktopProfile(
         process.env.DSH_TELEMETRY_DISABLED,
         homeDir,

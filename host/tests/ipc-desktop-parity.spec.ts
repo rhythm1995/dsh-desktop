@@ -11,7 +11,7 @@ function payload(url = 'http://127.0.0.1:9/'): DesktopShellPayload {
   return {
     mode: 'compatibility',
     macosMaterial: 'transparent',
-    windowsMaterial: 'acrylic',
+    windowsMaterial: 'off',
     width: 1280,
     height: 800,
     minWidth: 900,

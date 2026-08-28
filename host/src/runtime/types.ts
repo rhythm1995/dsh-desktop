@@ -11,7 +11,9 @@ export type DesktopThemeSource = 'system' | 'light' | 'dark'
 export type DesktopLocale = 'zh' | 'en'
 
 export type MacosWindowMaterial = 'off' | 'transparent'
-export type WindowsWindowMaterial = 'off' | 'acrylic' | 'mica'
+export type WindowsWindowMaterial = 'off' | 'mica'
+/** Persisted compatibility value accepted only so pre-removal settings still boot. */
+export type PersistedWindowsWindowMaterial = WindowsWindowMaterial | 'acrylic'
 export type DesktopWindowMaterial = MacosWindowMaterial | WindowsWindowMaterial
 
 export type DesktopTrayItemGroup = 'tools' | 'profiles' | 'status' | 'mode'
@@ -29,7 +31,7 @@ export interface DesktopNotification {
 export interface DesktopWindowConfig {
   readonly mode: DesktopShellMode
   readonly macosMaterial: MacosWindowMaterial
-  readonly windowsMaterial: WindowsWindowMaterial
+  readonly windowsMaterial: PersistedWindowsWindowMaterial
   readonly width: number
   readonly height: number
   readonly minWidth: number

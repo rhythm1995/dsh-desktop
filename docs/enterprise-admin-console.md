@@ -1,6 +1,6 @@
 # DeepSeek Harness 企业级管理后台功能调研（对标 Codex / Cursor / Claude Code 企业版）
 
-> 调研文档，**不是本仓库实现规格**。本仓库只做 Tauri 桌面壳。入口：[`README.md`](README.md)。生态与治理插件普查见 [`deepseek-harness-enterprise.md`](deepseek-harness-enterprise.md)。
+> 调研文档，**不是本仓库实现规格**。本仓库只做 Tauri 桌面壳。入口：[`README.md`](README.md)。生态与治理插件普查见 [`deepseek-harness-enterprise.md`](deepseek-harness-enterprise.md)。**pin 策略已改为跟随 harness 最新 `dsh-v*` 标签**（见 [`kernel-sync.md`](kernel-sync.md)），anywhere-labs 不是 pin 权威。
 
 调研日期：2026-08-26。问题：如果给 DeepSeek Harness（本地检出 `.deepseek-harness/`，deepseek-ai 官方内核）做一个企业级管理后台，需要哪些功能？对标对象是 OpenAI（ChatGPT Enterprise / Codex）、Cursor（Teams / Enterprise）、Anthropic（Claude Enterprise / Claude Code）三家官方管理后台。
 

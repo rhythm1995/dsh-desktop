@@ -15,7 +15,7 @@
 这不是把 Electron API 翻译成 Tauri——官方 Web Client、Harness 内核、社区插件、Market、profile 语义**一行不改**，本仓库只实现壳层与一个 `IpcDesktopRuntime` 适配层。
 
 > [!IMPORTANT]
-> 产品内核（`.deepseek-harness` 检出，pin 记录在 [`docs/kernel-pin.json`](docs/kernel-pin.json)）必须原封不动：不改内核文件，不把桌面补丁打进内核树。版本对齐官方桌面项目的 `upstream.json`，同步流程见 [`docs/kernel-sync.md`](docs/kernel-sync.md)。
+> 产品内核（`.deepseek-harness` 检出，pin 记录在 [`docs/kernel-pin.json`](docs/kernel-pin.json)）必须原封不动：不改内核文件，不把桌面补丁打进内核树。唯一上游是 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 的最新 `dsh-v*` 标签，不跟 anywhere-labs `upstream.json`。同步流程见 [`docs/kernel-sync.md`](docs/kernel-sync.md)。
 
 ## 架构
 
@@ -45,7 +45,7 @@
 | `docs/` | 架构、缺口、内核同步、CI/CD、开发监听文档（索引见 [`docs/README.md`](docs/README.md)） |
 | `scripts/` | 官方 Host 同步、构建 profile、生产打包脚本 |
 
-`.anywhere-labs-dsh-desktop/`（原始 Electron 项目）与 `.deepseek-harness/`（内核）是 git 忽略的本地检出，只用于对照，不进本仓库。
+`.deepseek-harness/`（内核）与 `.anywhere-labs-dsh-desktop/`（可选的 Electron 对照 / Host 适配器检出）是 git 忽略的本地检出，不进本仓库。内核 pin 只跟 harness。
 
 ## 快速开始
 

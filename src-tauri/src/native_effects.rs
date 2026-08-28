@@ -156,10 +156,10 @@ impl NativeSession {
                     } else {
                         "transparent"
                     },
-                    if matches!(payload.material.as_str(), "acrylic" | "mica" | "off") {
-                        payload.material.as_str()
+                    if payload.material == "mica" {
+                        "mica"
                     } else {
-                        "acrylic"
+                        "off"
                     },
                     None,
                     self.zoom_level,
