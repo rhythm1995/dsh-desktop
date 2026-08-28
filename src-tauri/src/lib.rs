@@ -1,9 +1,11 @@
 mod app_menu;
 mod bootstrap;
+mod composer_surfaces;
 mod dialog;
 mod host_process;
 #[cfg(target_os = "macos")]
 mod macos_chrome;
+mod main_view_theme;
 mod materials;
 mod native_effects;
 mod profile;
@@ -43,6 +45,8 @@ use window_ops::{
 use window_ops::application_needs_reveal;
 use window_spec::{chrome_for_mode, ShellPayload};
 use settings_fullscreen::SETTINGS_FULLSCREEN_SCRIPT;
+use main_view_theme::MAIN_VIEW_THEME_SCRIPT;
+use composer_surfaces::COMPOSER_SURFACES_SCRIPT;
 
 const BOUNDS_DEBOUNCE_MS: u64 = 250;
 
@@ -261,6 +265,12 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<tauri::WebviewWindow> {
         .expect("main window config");
     let nav_handle = app.handle().clone();
     let window = WebviewWindowBuilder::from_config(app.handle(), &config)?
+        // The desktop main view is pinned to the dark product form; the native
+        // titlebar material must follow the web palette instead of the system
+        // appearance. The background color shows through the transparent
+        // desktop-frame titlebar strip (web body is transparent above #root).
+        .theme(Some(tauri::Theme::Dark))
+        .background_color(tauri::window::Color(0x16, 0x16, 0x16, 255))
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .hidden_title(true)
         .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition {
@@ -299,6 +309,8 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<tauri::WebviewWindow> {
             let _ = window.eval(ZOOM_SHORTCUT_SCRIPT);
             let _ = window.eval(FILE_PATH_BRIDGE_SCRIPT);
             let _ = window.eval(SETTINGS_FULLSCREEN_SCRIPT);
+            let _ = window.eval(MAIN_VIEW_THEME_SCRIPT);
+            let _ = window.eval(COMPOSER_SURFACES_SCRIPT);
         })
         .build()?;
     apply_traffic_light_chrome(&window, chrome_for_mode("compatibility").titlebar_height);
