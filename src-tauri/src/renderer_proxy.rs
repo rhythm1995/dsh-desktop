@@ -79,26 +79,42 @@ pub fn rewrite_location(secret: &str, target: &Url, proxy_origin: &str, location
     location.to_string()
 }
 
-/// Script injected into carrier HTML: absolute carrier-origin fetch/XHR/
-/// WebSocket URLs are rewritten onto the proxy path so the renderer
-/// capability reaches even hard-coded absolute endpoints.
+/// Script injected into carrier HTML: every same-origin request the renderer
+/// makes — absolute carrier URLs and, crucially, the relative `/api/...`
+/// paths the kernel client actually uses (fetch, XHR, and WebSocket upgrades,
+/// which carry no `Referer` to authorize them) — is rewritten onto the
+/// proxy's secret path so the renderer capability reaches the carrier.
 pub fn origin_rewrite_script(carrier_authority: &str, proxy_authority: &str, secret: &str) -> String {
     let carrier = serde_json::to_string(carrier_authority).expect("carrier authority json");
     let proxy_base = serde_json::to_string(&format!("http://{proxy_authority}/{secret}"))
         .expect("proxy base json");
+    let proxy_authority_json =
+        serde_json::to_string(proxy_authority).expect("proxy authority json");
+    let secret_json = serde_json::to_string(secret).expect("proxy secret json");
     format!(
         r#"(function () {{
   if (window.__DSH_DESKTOP_ORIGIN_REWRITE__) return;
   window.__DSH_DESKTOP_ORIGIN_REWRITE__ = true;
   var CARRIER = {carrier};
   var BASE = {proxy_base};
+  var PROXY_AUTH = {proxy_authority_json};
+  var SECRET_PREFIX = '/' + {secret_json} + '/';
+  function withSecret(u) {{
+    var p = new URL(BASE + u.pathname + u.search + u.hash);
+    if (u.protocol === 'ws:') p.protocol = 'ws:';
+    if (u.protocol === 'wss:') p.protocol = 'wss:';
+    return p.href;
+  }}
   function rewrite(raw) {{
     try {{
       var u = new URL(String(raw), location.href);
-      if (u.origin !== 'http://' + CARRIER && u.origin !== 'ws://' + CARRIER) return null;
-      var p = new URL(u.pathname + u.search + u.hash, BASE);
-      p.protocol = u.protocol === 'ws:' ? 'ws:' : p.protocol;
-      return p.href;
+      // Authority, not origin: WebKit derives a ws: URL's origin as
+      // `ws://host:port`, so origin equality silently never matches the
+      // event-stream WebSockets this rewrite exists for.
+      if (u.host === CARRIER) return withSecret(u);
+      if (u.host === PROXY_AUTH
+        && u.pathname.slice(0, SECRET_PREFIX.length) !== SECRET_PREFIX) return withSecret(u);
+      return null;
     }} catch (error) {{ return null; }}
   }}
   var fetchNative = window.fetch;
@@ -122,6 +138,8 @@ pub fn origin_rewrite_script(carrier_authority: &str, proxy_authority: &str, sec
     function WrappedWebSocket(url, protocols) {{
       var rewritten = rewrite(url);
       var target = rewritten === null ? String(url) : rewritten;
+      if (target.indexOf('http://') === 0) target = 'ws://' + target.slice(7);
+      else if (target.indexOf('https://') === 0) target = 'wss://' + target.slice(8);
       return protocols === undefined
         ? new webSocketNative(target)
         : new webSocketNative(target, protocols);
@@ -500,6 +518,22 @@ mod tests {
         assert!(script.contains("__DSH_DESKTOP_ORIGIN_REWRITE__"));
         assert!(script.contains("window.fetch"));
         assert!(script.contains("window.WebSocket"));
+    }
+
+    #[test]
+    fn origin_rewrite_script_prefixes_secret_onto_same_origin_requests() {
+        let script = origin_rewrite_script("127.0.0.1:43120", "127.0.0.1:54321", SECRET);
+        // Relative /api paths resolve against the proxy origin and must gain
+        // the secret path — WebSocket upgrades carry no Referer to authorize
+        // them, so the old carrier-only rewrite 404'd every event stream.
+        // Authority-based matching, not origin: WebKit derives a ws: URL's
+        // origin as `ws://host:port`, so origin equality never matched there.
+        assert!(script.contains("u.host === CARRIER"));
+        assert!(script.contains("u.host === PROXY_AUTH"));
+        assert!(script.contains("u.pathname.slice(0, SECRET_PREFIX.length) !== SECRET_PREFIX"));
+        assert!(script.contains("new URL(BASE + u.pathname + u.search + u.hash)"));
+        // A WebSocket constructor handed an http(s) URL throws SyntaxError.
+        assert!(script.contains("target.indexOf('http://') === 0"));
     }
 
     #[test]

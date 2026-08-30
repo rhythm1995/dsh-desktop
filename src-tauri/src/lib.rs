@@ -13,6 +13,7 @@ mod profile_create;
 mod protocol;
 mod recovery;
 mod renderer_proxy;
+mod settings_conflict_retry;
 mod settings_fullscreen;
 mod tray_locale;
 mod user_data;
@@ -47,6 +48,7 @@ use window_spec::{chrome_for_mode, ShellPayload};
 use settings_fullscreen::SETTINGS_FULLSCREEN_SCRIPT;
 use main_view_theme::MAIN_VIEW_THEME_SCRIPT;
 use composer_surfaces::COMPOSER_SURFACES_SCRIPT;
+use settings_conflict_retry::SETTINGS_CONFLICT_RETRY_SCRIPT;
 
 const BOUNDS_DEBOUNCE_MS: u64 = 250;
 
@@ -311,6 +313,7 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<tauri::WebviewWindow> {
             let _ = window.eval(SETTINGS_FULLSCREEN_SCRIPT);
             let _ = window.eval(MAIN_VIEW_THEME_SCRIPT);
             let _ = window.eval(COMPOSER_SURFACES_SCRIPT);
+            let _ = window.eval(SETTINGS_CONFLICT_RETRY_SCRIPT);
         })
         .build()?;
     apply_traffic_light_chrome(&window, chrome_for_mode("compatibility").titlebar_height);
@@ -667,6 +670,7 @@ fn mount_renderer_proxy(state: &AppState, payload: &ShellPayload) -> String {
             let webview_url = proxy
                 .webview_url(&url::Url::parse(&payload.url).expect("carrier url parsed twice"))
                 .to_string();
+            eprintln!("dsh-desktop: renderer proxy mounted, webview url: {webview_url}");
             *state.renderer_proxy.lock().expect("renderer proxy") = Some(proxy);
             webview_url
         }
